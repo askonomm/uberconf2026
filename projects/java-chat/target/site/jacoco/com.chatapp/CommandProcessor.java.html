@@ -1,0 +1,706 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommandProcessor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">CommandProcessor.java</span></div><h1>CommandProcessor.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Handles all slash-command parsing and execution.
+ * Routes commands to the appropriate subsystem and returns results.
+ */
+public class CommandProcessor {
+
+    private static final String ANSI_RESET = &quot;\u001B[0m&quot;;
+    private static final String ANSI_RED = &quot;\u001B[31m&quot;;
+    private static final String ANSI_GREEN = &quot;\u001B[32m&quot;;
+    private static final String ANSI_YELLOW = &quot;\u001B[33m&quot;;
+    private static final String ANSI_BLUE = &quot;\u001B[34m&quot;;
+    private static final String ANSI_PURPLE = &quot;\u001B[35m&quot;;
+    private static final String ANSI_CYAN = &quot;\u001B[36m&quot;;
+    private static final String ANSI_WHITE = &quot;\u001B[37m&quot;;
+    private static final String ANSI_BOLD = &quot;\u001B[1m&quot;;
+
+    private ChatEngine chatEngine;
+    private UserManager userManager;
+    private RoomManager roomManager;
+    private MessageStore messageStore;
+    private Map&lt;String, Integer&gt; commandUsageCount;
+    private List&lt;String&gt; commandLog;
+    private Map&lt;String, Long&gt; lastCommandTime;
+    private boolean commandLoggingEnabled;
+
+    public CommandProcessor(ChatEngine chatEngine, UserManager userManager,
+<span class="nc" id="L33">                             RoomManager roomManager, MessageStore messageStore) {</span>
+<span class="nc" id="L34">        this.chatEngine = chatEngine;</span>
+<span class="nc" id="L35">        this.userManager = userManager;</span>
+<span class="nc" id="L36">        this.roomManager = roomManager;</span>
+<span class="nc" id="L37">        this.messageStore = messageStore;</span>
+<span class="nc" id="L38">        this.commandUsageCount = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L39">        this.commandLog = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L40">        this.lastCommandTime = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L41">        this.commandLoggingEnabled = true;</span>
+<span class="nc" id="L42">    }</span>
+
+    // Main command dispatch - parses and routes all / commands
+    public String processCommand(String input, String username, String currentRoom) {
+<span class="nc bnc" id="L46" title="All 6 branches missed.">        if (input == null || input.isEmpty() || !input.startsWith(&quot;/&quot;)) {</span>
+<span class="nc" id="L47">            return &quot;ERROR:Not a command&quot;;</span>
+        }
+<span class="nc" id="L49">        String trimmed = input.trim();</span>
+<span class="nc" id="L50">        String[] parts = trimmed.split(&quot;\\s+&quot;, 2);</span>
+<span class="nc" id="L51">        String command = parts[0].toLowerCase();</span>
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        String args = parts.length &gt; 1 ? parts[1] : &quot;&quot;;</span>
+        // Log command
+<span class="nc bnc" id="L54" title="All 2 branches missed.">        if (commandLoggingEnabled) {</span>
+<span class="nc" id="L55">            String logEntry = LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;)) +</span>
+                    &quot; [&quot; + username + &quot;] &quot; + command;
+<span class="nc" id="L57">            commandLog.add(logEntry);</span>
+<span class="nc bnc" id="L58" title="All 2 branches missed.">            if (commandLog.size() &gt; 500) {</span>
+<span class="nc" id="L59">                commandLog.remove(0);</span>
+            }
+<span class="nc" id="L61">            int usage = commandUsageCount.getOrDefault(command, 0);</span>
+<span class="nc" id="L62">            commandUsageCount.put(command, usage + 1);</span>
+<span class="nc" id="L63">            lastCommandTime.put(command, System.currentTimeMillis());</span>
+        }
+        // Route to appropriate handler
+<span class="nc bnc" id="L66" title="All 6 branches missed.">        if (command.equals(&quot;/help&quot;) || command.equals(&quot;/h&quot;) || command.equals(&quot;/?&quot;)) {</span>
+<span class="nc" id="L67">            return handleHelp(args, username, currentRoom);</span>
+<span class="nc bnc" id="L68" title="All 6 branches missed.">        } else if (command.equals(&quot;/quit&quot;) || command.equals(&quot;/exit&quot;) || command.equals(&quot;/q&quot;)) {</span>
+<span class="nc" id="L69">            return handleQuit(args, username, currentRoom);</span>
+<span class="nc bnc" id="L70" title="All 4 branches missed.">        } else if (command.equals(&quot;/join&quot;) || command.equals(&quot;/j&quot;)) {</span>
+<span class="nc" id="L71">            return handleJoin(args, username, currentRoom);</span>
+<span class="nc bnc" id="L72" title="All 4 branches missed.">        } else if (command.equals(&quot;/leave&quot;) || command.equals(&quot;/part&quot;)) {</span>
+<span class="nc" id="L73">            return handleLeave(args, username, currentRoom);</span>
+<span class="nc bnc" id="L74" title="All 8 branches missed.">        } else if (command.equals(&quot;/msg&quot;) || command.equals(&quot;/pm&quot;) || command.equals(&quot;/whisper&quot;) || command.equals(&quot;/w&quot;)) {</span>
+<span class="nc" id="L75">            return handlePrivateMessage(args, username, currentRoom);</span>
+<span class="nc bnc" id="L76" title="All 6 branches missed.">        } else if (command.equals(&quot;/list&quot;) || command.equals(&quot;/rooms&quot;) || command.equals(&quot;/ls&quot;)) {</span>
+<span class="nc" id="L77">            return handleList(args, username, currentRoom);</span>
+<span class="nc bnc" id="L78" title="All 6 branches missed.">        } else if (command.equals(&quot;/history&quot;) || command.equals(&quot;/hist&quot;) || command.equals(&quot;/log&quot;)) {</span>
+<span class="nc" id="L79">            return handleHistory(args, username, currentRoom);</span>
+<span class="nc bnc" id="L80" title="All 6 branches missed.">        } else if (command.equals(&quot;/search&quot;) || command.equals(&quot;/find&quot;) || command.equals(&quot;/grep&quot;)) {</span>
+<span class="nc" id="L81">            return handleSearch(args, username, currentRoom);</span>
+<span class="nc bnc" id="L82" title="All 6 branches missed.">        } else if (command.equals(&quot;/users&quot;) || command.equals(&quot;/who&quot;) || command.equals(&quot;/online&quot;)) {</span>
+<span class="nc" id="L83">            return handleUsers(args, username, currentRoom);</span>
+<span class="nc bnc" id="L84" title="All 6 branches missed.">        } else if (command.equals(&quot;/create&quot;) || command.equals(&quot;/newroom&quot;) || command.equals(&quot;/mkroom&quot;)) {</span>
+<span class="nc" id="L85">            return handleCreateRoom(args, username, currentRoom);</span>
+<span class="nc bnc" id="L86" title="All 4 branches missed.">        } else if (command.equals(&quot;/topic&quot;) || command.equals(&quot;/settopic&quot;)) {</span>
+<span class="nc" id="L87">            return handleTopic(args, username, currentRoom);</span>
+<span class="nc bnc" id="L88" title="All 4 branches missed.">        } else if (command.equals(&quot;/status&quot;) || command.equals(&quot;/setstatus&quot;)) {</span>
+<span class="nc" id="L89">            return handleStatus(args, username, currentRoom);</span>
+<span class="nc bnc" id="L90" title="All 6 branches missed.">        } else if (command.equals(&quot;/profile&quot;) || command.equals(&quot;/whois&quot;) || command.equals(&quot;/info&quot;)) {</span>
+<span class="nc" id="L91">            return handleProfile(args, username, currentRoom);</span>
+<span class="nc bnc" id="L92" title="All 4 branches missed.">        } else if (command.equals(&quot;/block&quot;) || command.equals(&quot;/ignore&quot;)) {</span>
+<span class="nc" id="L93">            return handleBlock(args, username, currentRoom);</span>
+<span class="nc bnc" id="L94" title="All 4 branches missed.">        } else if (command.equals(&quot;/unblock&quot;) || command.equals(&quot;/unignore&quot;)) {</span>
+<span class="nc" id="L95">            return handleUnblock(args, username, currentRoom);</span>
+<span class="nc bnc" id="L96" title="All 4 branches missed.">        } else if (command.equals(&quot;/stats&quot;) || command.equals(&quot;/statistics&quot;)) {</span>
+<span class="nc" id="L97">            return handleStats(args, username, currentRoom);</span>
+<span class="nc bnc" id="L98" title="All 4 branches missed.">        } else if (command.equals(&quot;/roominfo&quot;) || command.equals(&quot;/ri&quot;)) {</span>
+<span class="nc" id="L99">            return handleRoomInfo(args, username, currentRoom);</span>
+<span class="nc bnc" id="L100" title="All 6 branches missed.">        } else if (command.equals(&quot;/notifications&quot;) || command.equals(&quot;/notifs&quot;) || command.equals(&quot;/alerts&quot;)) {</span>
+<span class="nc" id="L101">            return handleNotifications(args, username, currentRoom);</span>
+<span class="nc bnc" id="L102" title="All 4 branches missed.">        } else if (command.equals(&quot;/me&quot;) || command.equals(&quot;/action&quot;)) {</span>
+<span class="nc" id="L103">            return handleMeAction(args, username, currentRoom);</span>
+<span class="nc bnc" id="L104" title="All 4 branches missed.">        } else if (command.equals(&quot;/clear&quot;) || command.equals(&quot;/cls&quot;)) {</span>
+<span class="nc" id="L105">            return handleClear(args, username, currentRoom);</span>
+<span class="nc bnc" id="L106" title="All 4 branches missed.">        } else if (command.equals(&quot;/bio&quot;) || command.equals(&quot;/setbio&quot;)) {</span>
+<span class="nc" id="L107">            return handleBio(args, username, currentRoom);</span>
+<span class="nc bnc" id="L108" title="All 4 branches missed.">        } else if (command.equals(&quot;/addfriend&quot;) || command.equals(&quot;/friend&quot;)) {</span>
+<span class="nc" id="L109">            return handleAddFriend(args, username, currentRoom);</span>
+<span class="nc bnc" id="L110" title="All 4 branches missed.">        } else if (command.equals(&quot;/mentions&quot;) || command.equals(&quot;/m&quot;)) {</span>
+<span class="nc" id="L111">            return handleMentions(args, username, currentRoom);</span>
+        } else {
+<span class="nc" id="L113">            return ANSI_RED + &quot;Unknown command: &quot; + command + &quot;. Type /help for a list of commands.&quot; + ANSI_RESET;</span>
+        }
+    }
+
+    private String handleHelp(String args, String username, String currentRoom) {
+<span class="nc" id="L118">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L119">        sb.append(ANSI_CYAN).append(ANSI_BOLD).append(&quot;=== JavaChat Commands ===&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L120" title="All 4 branches missed.">        if (args == null || args.isEmpty()) {</span>
+<span class="nc" id="L121">            sb.append(ANSI_GREEN).append(ANSI_BOLD).append(&quot;Navigation:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L122">            sb.append(ANSI_WHITE).append(&quot;  /join &lt;room&gt;      &quot;).append(ANSI_RESET).append(&quot;Join or switch to a room\n&quot;);</span>
+<span class="nc" id="L123">            sb.append(ANSI_WHITE).append(&quot;  /leave [room]     &quot;).append(ANSI_RESET).append(&quot;Leave current or specified room\n&quot;);</span>
+<span class="nc" id="L124">            sb.append(ANSI_WHITE).append(&quot;  /list             &quot;).append(ANSI_RESET).append(&quot;List all available rooms\n&quot;);</span>
+<span class="nc" id="L125">            sb.append(ANSI_GREEN).append(ANSI_BOLD).append(&quot;Messaging:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L126">            sb.append(ANSI_WHITE).append(&quot;  /msg &lt;user&gt; &lt;msg&gt; &quot;).append(ANSI_RESET).append(&quot;Send a private message\n&quot;);</span>
+<span class="nc" id="L127">            sb.append(ANSI_WHITE).append(&quot;  /me &lt;action&gt;      &quot;).append(ANSI_RESET).append(&quot;Perform an action (e.g. /me waves)\n&quot;);</span>
+<span class="nc" id="L128">            sb.append(ANSI_WHITE).append(&quot;  /history [n]      &quot;).append(ANSI_RESET).append(&quot;Show last n messages (default 20)\n&quot;);</span>
+<span class="nc" id="L129">            sb.append(ANSI_WHITE).append(&quot;  /search &lt;query&gt;   &quot;).append(ANSI_RESET).append(&quot;Search messages in current room\n&quot;);</span>
+<span class="nc" id="L130">            sb.append(ANSI_WHITE).append(&quot;  /mentions         &quot;).append(ANSI_RESET).append(&quot;Show recent @mentions of you\n&quot;);</span>
+<span class="nc" id="L131">            sb.append(ANSI_GREEN).append(ANSI_BOLD).append(&quot;Users:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L132">            sb.append(ANSI_WHITE).append(&quot;  /users            &quot;).append(ANSI_RESET).append(&quot;List online users\n&quot;);</span>
+<span class="nc" id="L133">            sb.append(ANSI_WHITE).append(&quot;  /profile [user]   &quot;).append(ANSI_RESET).append(&quot;View user profile\n&quot;);</span>
+<span class="nc" id="L134">            sb.append(ANSI_WHITE).append(&quot;  /status &lt;status&gt;  &quot;).append(ANSI_RESET).append(&quot;Set status (online/away/busy)\n&quot;);</span>
+<span class="nc" id="L135">            sb.append(ANSI_WHITE).append(&quot;  /bio &lt;text&gt;       &quot;).append(ANSI_RESET).append(&quot;Set your bio\n&quot;);</span>
+<span class="nc" id="L136">            sb.append(ANSI_WHITE).append(&quot;  /block &lt;user&gt;     &quot;).append(ANSI_RESET).append(&quot;Block a user\n&quot;);</span>
+<span class="nc" id="L137">            sb.append(ANSI_WHITE).append(&quot;  /unblock &lt;user&gt;   &quot;).append(ANSI_RESET).append(&quot;Unblock a user\n&quot;);</span>
+<span class="nc" id="L138">            sb.append(ANSI_WHITE).append(&quot;  /addfriend &lt;user&gt; &quot;).append(ANSI_RESET).append(&quot;Add a user to friends\n&quot;);</span>
+<span class="nc" id="L139">            sb.append(ANSI_GREEN).append(ANSI_BOLD).append(&quot;Rooms:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L140">            sb.append(ANSI_WHITE).append(&quot;  /create &lt;name&gt;    &quot;).append(ANSI_RESET).append(&quot;Create a new room\n&quot;);</span>
+<span class="nc" id="L141">            sb.append(ANSI_WHITE).append(&quot;  /topic &lt;text&gt;     &quot;).append(ANSI_RESET).append(&quot;Set room topic\n&quot;);</span>
+<span class="nc" id="L142">            sb.append(ANSI_WHITE).append(&quot;  /roominfo [room]  &quot;).append(ANSI_RESET).append(&quot;Show room info\n&quot;);</span>
+<span class="nc" id="L143">            sb.append(ANSI_GREEN).append(ANSI_BOLD).append(&quot;Other:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L144">            sb.append(ANSI_WHITE).append(&quot;  /stats            &quot;).append(ANSI_RESET).append(&quot;Show chat statistics\n&quot;);</span>
+<span class="nc" id="L145">            sb.append(ANSI_WHITE).append(&quot;  /notifications    &quot;).append(ANSI_RESET).append(&quot;Show notifications\n&quot;);</span>
+<span class="nc" id="L146">            sb.append(ANSI_WHITE).append(&quot;  /clear            &quot;).append(ANSI_RESET).append(&quot;Clear the screen\n&quot;);</span>
+<span class="nc" id="L147">            sb.append(ANSI_WHITE).append(&quot;  /quit             &quot;).append(ANSI_RESET).append(&quot;Exit the chat\n&quot;);</span>
+<span class="nc" id="L148">            sb.append(ANSI_CYAN).append(&quot;Type /help &lt;command&gt; for detailed help on a specific command&quot;).append(ANSI_RESET);</span>
+        } else {
+<span class="nc" id="L150">            String helpCmd = args.trim().toLowerCase();</span>
+<span class="nc bnc" id="L151" title="All 2 branches missed.">            if (helpCmd.startsWith(&quot;/&quot;)) {</span>
+<span class="nc" id="L152">                helpCmd = helpCmd.substring(1);</span>
+            }
+<span class="nc bnc" id="L154" title="All 4 branches missed.">            if (helpCmd.equals(&quot;join&quot;) || helpCmd.equals(&quot;j&quot;)) {</span>
+<span class="nc" id="L155">                sb.append(ANSI_WHITE).append(&quot;Usage: /join &lt;roomname&gt;&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L156">                sb.append(&quot;Join the specified room. If the room doesn't exist, you'll be prompted to create it.\n&quot;);</span>
+<span class="nc" id="L157">                sb.append(&quot;Aliases: /j\n&quot;);</span>
+<span class="nc" id="L158">                sb.append(&quot;Example: /join general&quot;);</span>
+<span class="nc bnc" id="L159" title="All 6 branches missed.">            } else if (helpCmd.equals(&quot;msg&quot;) || helpCmd.equals(&quot;pm&quot;) || helpCmd.equals(&quot;whisper&quot;)) {</span>
+<span class="nc" id="L160">                sb.append(ANSI_WHITE).append(&quot;Usage: /msg &lt;username&gt; &lt;message&gt;&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L161">                sb.append(&quot;Send a private message to the specified user.\n&quot;);</span>
+<span class="nc" id="L162">                sb.append(&quot;Aliases: /pm, /whisper, /w\n&quot;);</span>
+<span class="nc" id="L163">                sb.append(&quot;Example: /msg alice Hey, how are you?&quot;);</span>
+<span class="nc bnc" id="L164" title="All 4 branches missed.">            } else if (helpCmd.equals(&quot;search&quot;) || helpCmd.equals(&quot;find&quot;)) {</span>
+<span class="nc" id="L165">                sb.append(ANSI_WHITE).append(&quot;Usage: /search &lt;query&gt; [--room &lt;room&gt;] [--user &lt;user&gt;]&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L166">                sb.append(&quot;Search messages in the current room (or specified room).\n&quot;);</span>
+<span class="nc" id="L167">                sb.append(&quot;Aliases: /find, /grep\n&quot;);</span>
+<span class="nc" id="L168">                sb.append(&quot;Example: /search hello world&quot;);</span>
+<span class="nc bnc" id="L169" title="All 4 branches missed.">            } else if (helpCmd.equals(&quot;history&quot;) || helpCmd.equals(&quot;hist&quot;)) {</span>
+<span class="nc" id="L170">                sb.append(ANSI_WHITE).append(&quot;Usage: /history [count] [--room &lt;room&gt;]&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L171">                sb.append(&quot;Show message history. Default shows last 20 messages.\n&quot;);</span>
+<span class="nc" id="L172">                sb.append(&quot;Aliases: /hist, /log\n&quot;);</span>
+<span class="nc" id="L173">                sb.append(&quot;Example: /history 50&quot;);</span>
+            } else {
+<span class="nc" id="L175">                sb.append(ANSI_YELLOW).append(&quot;No detailed help for: &quot;).append(args).append(ANSI_RESET);</span>
+            }
+        }
+<span class="nc" id="L178">        return sb.toString();</span>
+    }
+
+    private String handleQuit(String args, String username, String currentRoom) {
+<span class="nc" id="L182">        return &quot;QUIT&quot;;</span>
+    }
+
+    private String handleJoin(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L186" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L187">            return ANSI_RED + &quot;Usage: /join &lt;roomname&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L189">        String roomName = args.trim().split(&quot;\\s+&quot;)[0].toLowerCase();</span>
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (roomName.isEmpty()) {</span>
+<span class="nc" id="L191">            return ANSI_RED + &quot;Usage: /join &lt;roomname&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if (roomName.length() &lt; 2) {</span>
+<span class="nc" id="L194">            return ANSI_RED + &quot;Room name too short (min 2 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (roomName.length() &gt; 30) {</span>
+<span class="nc" id="L197">            return ANSI_RED + &quot;Room name too long (max 30 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        if (!roomName.matches(&quot;[a-zA-Z0-9_-]+&quot;)) {</span>
+<span class="nc" id="L200">            return ANSI_RED + &quot;Room name can only contain letters, numbers, hyphens, underscores&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if (roomName.equals(currentRoom)) {</span>
+<span class="nc" id="L203">            return ANSI_YELLOW + &quot;You are already in room '&quot; + roomName + &quot;'&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if (!roomManager.roomExists(roomName)) {</span>
+<span class="nc" id="L206">            System.out.print(ANSI_YELLOW + &quot;Room '&quot; + roomName + &quot;' does not exist. Create it? [y/N]: &quot; + ANSI_RESET);</span>
+<span class="nc" id="L207">            Scanner sc = new Scanner(System.in);</span>
+<span class="nc" id="L208">            String answer = sc.nextLine().trim();</span>
+<span class="nc bnc" id="L209" title="All 4 branches missed.">            if (answer.equalsIgnoreCase(&quot;y&quot;) || answer.equalsIgnoreCase(&quot;yes&quot;)) {</span>
+<span class="nc" id="L210">                boolean created = roomManager.createRoom(roomName, username, false, false, &quot;&quot;);</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">                if (!created) {</span>
+<span class="nc" id="L212">                    return ANSI_RED + &quot;Failed to create room '&quot; + roomName + &quot;'&quot; + ANSI_RESET;</span>
+                }
+<span class="nc" id="L214">                System.out.println(ANSI_GREEN + &quot;Room '&quot; + roomName + &quot;' created!&quot; + ANSI_RESET);</span>
+<span class="nc" id="L215">            } else {</span>
+<span class="nc" id="L216">                return ANSI_YELLOW + &quot;Join cancelled.&quot; + ANSI_RESET;</span>
+            }
+        }
+        // Leave current room
+<span class="nc bnc" id="L220" title="All 4 branches missed.">        if (currentRoom != null &amp;&amp; !currentRoom.isEmpty()) {</span>
+<span class="nc" id="L221">            roomManager.leaveRoom(username, currentRoom);</span>
+<span class="nc" id="L222">            chatEngine.broadcastRoomEvent(currentRoom, &quot;LEAVE&quot;, username, null);</span>
+        }
+<span class="nc" id="L224">        boolean joined = roomManager.joinRoom(username, roomName);</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (!joined) {</span>
+<span class="nc" id="L226">            return ANSI_RED + &quot;Failed to join room '&quot; + roomName + &quot;'&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L228">        chatEngine.broadcastRoomEvent(roomName, &quot;JOIN&quot;, username, null);</span>
+<span class="nc" id="L229">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L230">        return &quot;SWITCH_ROOM:&quot; + roomName;</span>
+    }
+
+    private String handleLeave(String args, String username, String currentRoom) {
+<span class="nc" id="L234">        String roomToLeave = currentRoom;</span>
+<span class="nc bnc" id="L235" title="All 4 branches missed.">        if (args != null &amp;&amp; !args.trim().isEmpty()) {</span>
+<span class="nc" id="L236">            roomToLeave = args.trim().split(&quot;\\s+&quot;)[0].toLowerCase();</span>
+        }
+<span class="nc bnc" id="L238" title="All 4 branches missed.">        if (roomToLeave == null || roomToLeave.isEmpty()) {</span>
+<span class="nc" id="L239">            return ANSI_RED + &quot;You are not in any room&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (!roomManager.isInRoom(username, roomToLeave)) {</span>
+<span class="nc" id="L242">            return ANSI_RED + &quot;You are not in room '&quot; + roomToLeave + &quot;'&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L244">        roomManager.leaveRoom(username, roomToLeave);</span>
+<span class="nc" id="L245">        chatEngine.broadcastRoomEvent(roomToLeave, &quot;LEAVE&quot;, username, null);</span>
+<span class="nc" id="L246">        userManager.updateLastActive(username);</span>
+        // Join general if we left current room
+<span class="nc bnc" id="L248" title="All 2 branches missed.">        if (roomToLeave.equals(currentRoom)) {</span>
+<span class="nc" id="L249">            String fallback = &quot;general&quot;;</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            if (!roomToLeave.equals(fallback)) {</span>
+<span class="nc" id="L251">                roomManager.joinRoom(username, fallback);</span>
+<span class="nc" id="L252">                chatEngine.broadcastRoomEvent(fallback, &quot;JOIN&quot;, username, &quot;from &quot; + roomToLeave);</span>
+<span class="nc" id="L253">                return &quot;SWITCH_ROOM:&quot; + fallback;</span>
+            }
+        }
+<span class="nc" id="L256">        return ANSI_GREEN + &quot;Left room: &quot; + roomToLeave + ANSI_RESET;</span>
+    }
+
+    private String handlePrivateMessage(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L260" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L261">            return ANSI_RED + &quot;Usage: /msg &lt;username&gt; &lt;message&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L263">        String[] parts = args.trim().split(&quot;\\s+&quot;, 2);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (parts.length &lt; 2) {</span>
+<span class="nc" id="L265">            return ANSI_RED + &quot;Usage: /msg &lt;username&gt; &lt;message&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L267">        String targetUser = parts[0];</span>
+<span class="nc" id="L268">        String message = parts[1];</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">        if (targetUser.isEmpty()) {</span>
+<span class="nc" id="L270">            return ANSI_RED + &quot;Username cannot be empty&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        if (message.isEmpty()) {</span>
+<span class="nc" id="L273">            return ANSI_RED + &quot;Message cannot be empty&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L275" title="All 2 branches missed.">        if (message.length() &gt; 500) {</span>
+<span class="nc" id="L276">            return ANSI_RED + &quot;Message too long (max 500 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        if (targetUser.equals(username)) {</span>
+<span class="nc" id="L279">            return ANSI_RED + &quot;Cannot send private message to yourself&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L281" title="All 2 branches missed.">        if (!userManager.isUsernameTaken(targetUser)) {</span>
+<span class="nc" id="L282">            return ANSI_RED + &quot;User '&quot; + targetUser + &quot;' not found&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        if (!userManager.isUserOnline(targetUser)) {</span>
+<span class="nc" id="L285">            return ANSI_YELLOW + &quot;User '&quot; + targetUser + &quot;' appears to be offline. Message may not be seen immediately.&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L287" title="All 2 branches missed.">        if (userManager.isBlocked(targetUser, username)) {</span>
+<span class="nc" id="L288">            return ANSI_RED + &quot;You have been blocked by &quot; + targetUser + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L290" title="All 2 branches missed.">        if (userManager.isBlocked(username, targetUser)) {</span>
+<span class="nc" id="L291">            return ANSI_RED + &quot;You have blocked &quot; + targetUser + &quot;. Unblock them first.&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L293">        chatEngine.sendPrivateMessage(username, targetUser, message, System.currentTimeMillis());</span>
+<span class="nc" id="L294">        messageStore.storePrivateMessage(username, targetUser, message, System.currentTimeMillis());</span>
+<span class="nc" id="L295">        userManager.addNotification(targetUser, &quot;Private message from &quot; + username);</span>
+<span class="nc" id="L296">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L297">        return &quot;&quot;;</span>
+    }
+
+    private String handleList(String args, String username, String currentRoom) {
+<span class="nc" id="L301">        roomManager.printRoomList(username);</span>
+<span class="nc" id="L302">        return &quot;&quot;;</span>
+    }
+
+    private String handleHistory(String args, String username, String currentRoom) {
+<span class="nc" id="L306">        int limit = 20;</span>
+<span class="nc" id="L307">        String room = currentRoom;</span>
+<span class="nc bnc" id="L308" title="All 4 branches missed.">        if (args != null &amp;&amp; !args.trim().isEmpty()) {</span>
+<span class="nc" id="L309">            String[] parts = args.trim().split(&quot;\\s+&quot;);</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            for (int i = 0; i &lt; parts.length; i++) {</span>
+<span class="nc bnc" id="L311" title="All 4 branches missed.">                if (parts[i].equals(&quot;--room&quot;) || parts[i].equals(&quot;-r&quot;)) {</span>
+<span class="nc bnc" id="L312" title="All 2 branches missed.">                    if (i + 1 &lt; parts.length) {</span>
+<span class="nc" id="L313">                        room = parts[++i];</span>
+                    }
+                } else {
+                    try {
+<span class="nc" id="L317">                        limit = Integer.parseInt(parts[i]);</span>
+<span class="nc bnc" id="L318" title="All 2 branches missed.">                        if (limit &lt; 1) limit = 1;</span>
+<span class="nc bnc" id="L319" title="All 2 branches missed.">                        if (limit &gt; 200) limit = 200;</span>
+<span class="nc" id="L320">                    } catch (NumberFormatException e) {</span>
+<span class="nc" id="L321">                        return ANSI_RED + &quot;Invalid count: &quot; + parts[i] + ANSI_RESET;</span>
+<span class="nc" id="L322">                    }</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L326" title="All 2 branches missed.">        if (!roomManager.roomExists(room)) {</span>
+<span class="nc" id="L327">            return ANSI_RED + &quot;Room not found: &quot; + room + ANSI_RESET;</span>
+        }
+<span class="nc" id="L329">        chatEngine.printMessageHistory(room, limit, username);</span>
+<span class="nc" id="L330">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L331">        return &quot;&quot;;</span>
+    }
+
+    private String handleSearch(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L335" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L336">            return ANSI_RED + &quot;Usage: /search &lt;query&gt; [--room &lt;room&gt;] [--user &lt;user&gt;] [--type &lt;type&gt;]&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L338">        String query = null;</span>
+<span class="nc" id="L339">        String room = currentRoom;</span>
+<span class="nc" id="L340">        String searchUser = null;</span>
+<span class="nc" id="L341">        String searchType = &quot;contains&quot;;</span>
+<span class="nc" id="L342">        String[] parts = args.trim().split(&quot;\\s+&quot;);</span>
+<span class="nc" id="L343">        List&lt;String&gt; queryParts = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L344" title="All 2 branches missed.">        for (int i = 0; i &lt; parts.length; i++) {</span>
+<span class="nc bnc" id="L345" title="All 4 branches missed.">            if (parts[i].equals(&quot;--room&quot;) || parts[i].equals(&quot;-r&quot;)) {</span>
+<span class="nc bnc" id="L346" title="All 2 branches missed.">                if (i + 1 &lt; parts.length) {</span>
+<span class="nc" id="L347">                    room = parts[++i];</span>
+                } else {
+<span class="nc" id="L349">                    return ANSI_RED + &quot;--room requires a room argument&quot; + ANSI_RESET;</span>
+                }
+<span class="nc bnc" id="L351" title="All 4 branches missed.">            } else if (parts[i].equals(&quot;--user&quot;) || parts[i].equals(&quot;-u&quot;)) {</span>
+<span class="nc bnc" id="L352" title="All 2 branches missed.">                if (i + 1 &lt; parts.length) {</span>
+<span class="nc" id="L353">                    searchUser = parts[++i];</span>
+                } else {
+<span class="nc" id="L355">                    return ANSI_RED + &quot;--user requires a username argument&quot; + ANSI_RESET;</span>
+                }
+<span class="nc bnc" id="L357" title="All 4 branches missed.">            } else if (parts[i].equals(&quot;--type&quot;) || parts[i].equals(&quot;-t&quot;)) {</span>
+<span class="nc bnc" id="L358" title="All 2 branches missed.">                if (i + 1 &lt; parts.length) {</span>
+<span class="nc" id="L359">                    searchType = parts[++i];</span>
+<span class="nc bnc" id="L360" title="All 4 branches missed.">                    if (!searchType.equals(&quot;contains&quot;) &amp;&amp; !searchType.equals(&quot;startsWith&quot;) &amp;&amp;</span>
+<span class="nc bnc" id="L361" title="All 6 branches missed.">                            !searchType.equals(&quot;endsWith&quot;) &amp;&amp; !searchType.equals(&quot;exact&quot;) &amp;&amp; !searchType.equals(&quot;regex&quot;)) {</span>
+<span class="nc" id="L362">                        return ANSI_RED + &quot;Invalid search type. Use: contains/startsWith/endsWith/exact/regex&quot; + ANSI_RESET;</span>
+                    }
+                } else {
+<span class="nc" id="L365">                    return ANSI_RED + &quot;--type requires a type argument&quot; + ANSI_RESET;</span>
+                }
+<span class="nc bnc" id="L367" title="All 4 branches missed.">            } else if (parts[i].equals(&quot;--all&quot;) || parts[i].equals(&quot;-a&quot;)) {</span>
+<span class="nc" id="L368">                room = &quot;*&quot;;</span>
+            } else {
+<span class="nc" id="L370">                queryParts.add(parts[i]);</span>
+            }
+        }
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        if (queryParts.isEmpty()) {</span>
+<span class="nc" id="L374">            return ANSI_RED + &quot;Usage: /search &lt;query&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L376">        query = String.join(&quot; &quot;, queryParts);</span>
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        if (query.length() &lt; 2) {</span>
+<span class="nc" id="L378">            return ANSI_RED + &quot;Search query too short (min 2 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L380" title="All 2 branches missed.">        if (query.length() &gt; 100) {</span>
+<span class="nc" id="L381">            return ANSI_RED + &quot;Search query too long (max 100 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L383">        List&lt;String[]&gt; results = chatEngine.searchMessages(room, query, searchType, searchUser, 0, 0);</span>
+<span class="nc" id="L384">        chatEngine.printSearchResults(results, query);</span>
+<span class="nc" id="L385">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L386">        return &quot;&quot;;</span>
+    }
+
+    private String handleUsers(String args, String username, String currentRoom) {
+<span class="nc" id="L390">        List&lt;String&gt; onlineUsers = userManager.getOnlineUsers();</span>
+<span class="nc" id="L391">        Set&lt;String&gt; roomMembers = roomManager.getRoomMembers(currentRoom);</span>
+<span class="nc" id="L392">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Online Users ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L393">        System.out.println(ANSI_WHITE + &quot;Total online: &quot; + onlineUsers.size() + ANSI_RESET);</span>
+<span class="nc" id="L394">        System.out.println(ANSI_WHITE + &quot;In this room (&quot; + currentRoom + &quot;): &quot; + roomMembers.size() + ANSI_RESET);</span>
+<span class="nc" id="L395">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;In #&quot; + currentRoom + &quot;:&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        for (String member : roomMembers) {</span>
+<span class="nc" id="L397">            String status = userManager.getUserStatus(member);</span>
+            String statusColor;
+            String statusIcon;
+<span class="nc bnc" id="L400" title="All 2 branches missed.">            if (status.equals(&quot;online&quot;)) {</span>
+<span class="nc" id="L401">                statusColor = ANSI_GREEN;</span>
+<span class="nc" id="L402">                statusIcon = &quot;●&quot;;</span>
+<span class="nc bnc" id="L403" title="All 2 branches missed.">            } else if (status.equals(&quot;away&quot;)) {</span>
+<span class="nc" id="L404">                statusColor = ANSI_YELLOW;</span>
+<span class="nc" id="L405">                statusIcon = &quot;◑&quot;;</span>
+<span class="nc bnc" id="L406" title="All 2 branches missed.">            } else if (status.equals(&quot;busy&quot;)) {</span>
+<span class="nc" id="L407">                statusColor = ANSI_RED;</span>
+<span class="nc" id="L408">                statusIcon = &quot;○&quot;;</span>
+            } else {
+<span class="nc" id="L410">                statusColor = ANSI_WHITE;</span>
+<span class="nc" id="L411">                statusIcon = &quot;○&quot;;</span>
+            }
+<span class="nc bnc" id="L413" title="All 2 branches missed.">            String marker = member.equals(username) ? &quot; (you)&quot; : &quot;&quot;;</span>
+<span class="nc" id="L414">            System.out.println(&quot;  &quot; + statusColor + statusIcon + &quot; &quot; + ANSI_BOLD + member + ANSI_RESET + marker);</span>
+<span class="nc" id="L415">        }</span>
+<span class="nc bnc" id="L416" title="All 4 branches missed.">        if (args != null &amp;&amp; args.contains(&quot;--all&quot;)) {</span>
+<span class="nc" id="L417">            System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;All online users:&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">            for (String user : onlineUsers) {</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">                if (!roomMembers.contains(user)) {</span>
+<span class="nc" id="L420">                    String status = userManager.getUserStatus(user);</span>
+<span class="nc bnc" id="L421" title="All 4 branches missed.">                    String statusColor = status.equals(&quot;online&quot;) ? ANSI_GREEN : status.equals(&quot;away&quot;) ? ANSI_YELLOW : ANSI_RED;</span>
+<span class="nc" id="L422">                    System.out.println(&quot;  &quot; + statusColor + &quot;● &quot; + ANSI_BOLD + user + ANSI_RESET);</span>
+                }
+<span class="nc" id="L424">            }</span>
+        }
+<span class="nc" id="L426">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L427">        return &quot;&quot;;</span>
+    }
+
+    private String handleCreateRoom(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L431" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L432">            return ANSI_RED + &quot;Usage: /create &lt;roomname&gt; [--private] [--readonly] [--topic &lt;text&gt;]&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L434">        String[] parts = args.trim().split(&quot;\\s+&quot;);</span>
+<span class="nc" id="L435">        String roomName = parts[0].toLowerCase();</span>
+<span class="nc" id="L436">        boolean isPrivate = false;</span>
+<span class="nc" id="L437">        boolean isReadOnly = false;</span>
+<span class="nc" id="L438">        String topic = &quot;&quot;;</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        for (int i = 1; i &lt; parts.length; i++) {</span>
+<span class="nc bnc" id="L440" title="All 4 branches missed.">            if (parts[i].equals(&quot;--private&quot;) || parts[i].equals(&quot;-p&quot;)) {</span>
+<span class="nc" id="L441">                isPrivate = true;</span>
+<span class="nc bnc" id="L442" title="All 4 branches missed.">            } else if (parts[i].equals(&quot;--readonly&quot;) || parts[i].equals(&quot;-ro&quot;)) {</span>
+<span class="nc" id="L443">                isReadOnly = true;</span>
+<span class="nc bnc" id="L444" title="All 4 branches missed.">            } else if (parts[i].equals(&quot;--topic&quot;) || parts[i].equals(&quot;-t&quot;)) {</span>
+<span class="nc bnc" id="L445" title="All 2 branches missed.">                if (i + 1 &lt; parts.length) {</span>
+<span class="nc" id="L446">                    StringBuilder topicBuilder = new StringBuilder();</span>
+<span class="nc bnc" id="L447" title="All 2 branches missed.">                    for (int j = i + 1; j &lt; parts.length; j++) {</span>
+<span class="nc bnc" id="L448" title="All 2 branches missed.">                        if (topicBuilder.length() &gt; 0) topicBuilder.append(&quot; &quot;);</span>
+<span class="nc" id="L449">                        topicBuilder.append(parts[j]);</span>
+                    }
+<span class="nc" id="L451">                    topic = topicBuilder.toString();</span>
+<span class="nc" id="L452">                    break;</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L456" title="All 4 branches missed.">        if (roomName.length() &lt; 2 || roomName.length() &gt; 30) {</span>
+<span class="nc" id="L457">            return ANSI_RED + &quot;Room name must be 2-30 characters&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L459" title="All 2 branches missed.">        if (!roomName.matches(&quot;[a-zA-Z0-9_-]+&quot;)) {</span>
+<span class="nc" id="L460">            return ANSI_RED + &quot;Room name can only contain letters, numbers, hyphens, underscores&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L462">        boolean created = roomManager.createRoom(roomName, username, isPrivate, isReadOnly, topic);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">        if (!created) {</span>
+<span class="nc" id="L464">            return ANSI_RED + &quot;Failed to create room '&quot; + roomName + &quot;'&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L466">        roomManager.joinRoom(username, roomName);</span>
+<span class="nc" id="L467">        chatEngine.broadcastRoomEvent(roomName, &quot;JOIN&quot;, username, &quot;room created&quot;);</span>
+<span class="nc" id="L468">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L469">        System.out.println(ANSI_GREEN + &quot;Room '&quot; + roomName + &quot;' created successfully!&quot; + ANSI_RESET);</span>
+<span class="nc" id="L470">        return &quot;SWITCH_ROOM:&quot; + roomName;</span>
+    }
+
+    private String handleTopic(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L474" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L475">            Map&lt;String, String&gt; info = roomManager.getRoomInfo(currentRoom);</span>
+<span class="nc bnc" id="L476" title="All 2 branches missed.">            if (info == null) {</span>
+<span class="nc" id="L477">                return ANSI_RED + &quot;Room not found&quot; + ANSI_RESET;</span>
+            }
+<span class="nc" id="L479">            String topic = info.getOrDefault(&quot;topic&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L480" title="All 2 branches missed.">            if (topic.isEmpty()) {</span>
+<span class="nc" id="L481">                return ANSI_YELLOW + &quot;No topic set for #&quot; + currentRoom + ANSI_RESET;</span>
+            }
+<span class="nc" id="L483">            return ANSI_CYAN + &quot;Topic for #&quot; + currentRoom + &quot;: &quot; + topic + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L485" title="All 2 branches missed.">        if (args.length() &gt; 200) {</span>
+<span class="nc" id="L486">            return ANSI_RED + &quot;Topic too long (max 200 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L488">        boolean success = roomManager.setTopic(currentRoom, args.trim(), username);</span>
+<span class="nc bnc" id="L489" title="All 2 branches missed.">        if (success) {</span>
+<span class="nc" id="L490">            chatEngine.broadcastRoomEvent(currentRoom, &quot;TOPIC_CHANGED&quot;, username, args.trim());</span>
+<span class="nc" id="L491">            userManager.updateLastActive(username);</span>
+<span class="nc" id="L492">            return ANSI_GREEN + &quot;Topic updated for #&quot; + currentRoom + ANSI_RESET;</span>
+        }
+<span class="nc" id="L494">        return ANSI_RED + &quot;Failed to set topic&quot; + ANSI_RESET;</span>
+    }
+
+    private String handleStatus(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L498" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L499">            String current = userManager.getUserStatus(username);</span>
+<span class="nc" id="L500">            return ANSI_CYAN + &quot;Your current status: &quot; + current + ANSI_RESET;</span>
+        }
+<span class="nc" id="L502">        String[] parts = args.trim().split(&quot;\\s+&quot;, 2);</span>
+<span class="nc" id="L503">        String newStatus = parts[0].toLowerCase();</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">        String message = parts.length &gt; 1 ? parts[1] : null;</span>
+<span class="nc" id="L505">        userManager.setUserStatus(username, newStatus);</span>
+<span class="nc bnc" id="L506" title="All 4 branches missed.">        if (message != null &amp;&amp; !message.isEmpty()) {</span>
+<span class="nc" id="L507">            userManager.setStatusMessage(username, message);</span>
+        }
+<span class="nc" id="L509">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L510">        return &quot;&quot;;</span>
+    }
+
+    private String handleProfile(String args, String username, String currentRoom) {
+<span class="nc" id="L514">        String targetUser = username;</span>
+<span class="nc bnc" id="L515" title="All 4 branches missed.">        if (args != null &amp;&amp; !args.trim().isEmpty()) {</span>
+<span class="nc" id="L516">            targetUser = args.trim().split(&quot;\\s+&quot;)[0];</span>
+        }
+<span class="nc" id="L518">        userManager.printUserProfile(targetUser, username);</span>
+<span class="nc" id="L519">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L520">        return &quot;&quot;;</span>
+    }
+
+    private String handleBlock(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L524" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L525">            return ANSI_RED + &quot;Usage: /block &lt;username&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L527">        String targetUser = args.trim().split(&quot;\\s+&quot;)[0];</span>
+<span class="nc" id="L528">        userManager.blockUser(username, targetUser);</span>
+<span class="nc" id="L529">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L530">        return &quot;&quot;;</span>
+    }
+
+    private String handleUnblock(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L534" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L535">            return ANSI_RED + &quot;Usage: /unblock &lt;username&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L537">        String targetUser = args.trim().split(&quot;\\s+&quot;)[0];</span>
+<span class="nc" id="L538">        userManager.unblockUser(username, targetUser);</span>
+<span class="nc" id="L539">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L540">        return &quot;&quot;;</span>
+    }
+
+    private String handleStats(String args, String username, String currentRoom) {
+<span class="nc" id="L544">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Chat Statistics ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L545">        System.out.println(ANSI_WHITE + &quot;Total messages sent: &quot; + chatEngine.getTotalMessageCount() + ANSI_RESET);</span>
+<span class="nc" id="L546">        System.out.println(ANSI_WHITE + &quot;Total rooms: &quot; + roomManager.getRoomCount() + ANSI_RESET);</span>
+<span class="nc" id="L547">        System.out.println(ANSI_WHITE + &quot;Online users: &quot; + userManager.getOnlineCount() + ANSI_RESET);</span>
+<span class="nc" id="L548">        System.out.println(ANSI_WHITE + &quot;Registered users: &quot; + userManager.getUserCount() + ANSI_RESET);</span>
+<span class="nc" id="L549">        System.out.println(ANSI_WHITE + &quot;Your messages: &quot; + chatEngine.getUserMessageCount(username) + ANSI_RESET);</span>
+<span class="nc" id="L550">        Map&lt;String, Integer&gt; allCounts = chatEngine.getAllUserMessageCounts();</span>
+<span class="nc bnc" id="L551" title="All 2 branches missed.">        if (!allCounts.isEmpty()) {</span>
+<span class="nc" id="L552">            System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Top message senders:&quot; + ANSI_RESET);</span>
+<span class="nc" id="L553">            List&lt;Map.Entry&lt;String, Integer&gt;&gt; sorted = new ArrayList&lt;&gt;(allCounts.entrySet());</span>
+<span class="nc" id="L554">            sorted.sort((a, b) -&gt; b.getValue().compareTo(a.getValue()));</span>
+<span class="nc" id="L555">            int display = Math.min(5, sorted.size());</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">            for (int i = 0; i &lt; display; i++) {</span>
+<span class="nc" id="L557">                System.out.println(&quot;  &quot; + (i + 1) + &quot;. &quot; + sorted.get(i).getKey() + &quot;: &quot; + sorted.get(i).getValue() + &quot; messages&quot;);</span>
+            }
+        }
+<span class="nc" id="L560">        messageStore.printStorageStats();</span>
+<span class="nc" id="L561">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Command usage:&quot; + ANSI_RESET);</span>
+<span class="nc" id="L562">        List&lt;Map.Entry&lt;String, Integer&gt;&gt; cmdSorted = new ArrayList&lt;&gt;(commandUsageCount.entrySet());</span>
+<span class="nc" id="L563">        cmdSorted.sort((a, b) -&gt; b.getValue().compareTo(a.getValue()));</span>
+<span class="nc" id="L564">        int cmdDisplay = Math.min(5, cmdSorted.size());</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">        for (int i = 0; i &lt; cmdDisplay; i++) {</span>
+<span class="nc" id="L566">            System.out.println(&quot;  &quot; + cmdSorted.get(i).getKey() + &quot;: &quot; + cmdSorted.get(i).getValue() + &quot; uses&quot;);</span>
+        }
+<span class="nc" id="L568">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L569">        return &quot;&quot;;</span>
+    }
+
+    private String handleRoomInfo(String args, String username, String currentRoom) {
+<span class="nc" id="L573">        String room = currentRoom;</span>
+<span class="nc bnc" id="L574" title="All 4 branches missed.">        if (args != null &amp;&amp; !args.trim().isEmpty()) {</span>
+<span class="nc" id="L575">            room = args.trim().split(&quot;\\s+&quot;)[0].toLowerCase();</span>
+        }
+<span class="nc bnc" id="L577" title="All 2 branches missed.">        if (!roomManager.roomExists(room)) {</span>
+<span class="nc" id="L578">            return ANSI_RED + &quot;Room not found: &quot; + room + ANSI_RESET;</span>
+        }
+<span class="nc" id="L580">        Map&lt;String, String&gt; info = roomManager.getRoomInfo(room);</span>
+<span class="nc" id="L581">        Set&lt;String&gt; members = roomManager.getRoomMembers(room);</span>
+<span class="nc" id="L582">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Room Info: #&quot; + room + &quot; ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L583">        System.out.println(ANSI_WHITE + &quot;Members: &quot; + members.size() + ANSI_RESET);</span>
+<span class="nc" id="L584">        System.out.println(ANSI_WHITE + &quot;Created: &quot; + info.getOrDefault(&quot;created&quot;, &quot;unknown&quot;) + ANSI_RESET);</span>
+<span class="nc" id="L585">        System.out.println(ANSI_WHITE + &quot;Creator: &quot; + info.getOrDefault(&quot;creator&quot;, &quot;unknown&quot;) + ANSI_RESET);</span>
+<span class="nc" id="L586">        String topic = info.getOrDefault(&quot;topic&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L587" title="All 2 branches missed.">        if (!topic.isEmpty()) {</span>
+<span class="nc" id="L588">            System.out.println(ANSI_WHITE + &quot;Topic: &quot; + topic + ANSI_RESET);</span>
+        }
+<span class="nc" id="L590">        boolean isPrivate = Boolean.parseBoolean(info.getOrDefault(&quot;isPrivate&quot;, &quot;false&quot;));</span>
+<span class="nc" id="L591">        boolean isReadOnly = Boolean.parseBoolean(info.getOrDefault(&quot;isReadOnly&quot;, &quot;false&quot;));</span>
+<span class="nc bnc" id="L592" title="All 2 branches missed.">        System.out.println(ANSI_WHITE + &quot;Private: &quot; + (isPrivate ? ANSI_YELLOW + &quot;yes&quot; : ANSI_GREEN + &quot;no&quot;) + ANSI_RESET);</span>
+<span class="nc bnc" id="L593" title="All 2 branches missed.">        System.out.println(ANSI_WHITE + &quot;Read-only: &quot; + (isReadOnly ? ANSI_YELLOW + &quot;yes&quot; : ANSI_GREEN + &quot;no&quot;) + ANSI_RESET);</span>
+<span class="nc" id="L594">        chatEngine.printRoomStatistics(room);</span>
+<span class="nc" id="L595">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L596">        return &quot;&quot;;</span>
+    }
+
+    private String handleNotifications(String args, String username, String currentRoom) {
+<span class="nc" id="L600">        List&lt;String&gt; notifs = userManager.getNotifications(username);</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">        if (notifs.isEmpty()) {</span>
+<span class="nc" id="L602">            return ANSI_YELLOW + &quot;No notifications&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L604">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Notifications (&quot; + notifs.size() + &quot;) ===&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L605" title="All 2 branches missed.">        for (String notif : notifs) {</span>
+<span class="nc" id="L606">            System.out.println(ANSI_WHITE + &quot;  • &quot; + notif + ANSI_RESET);</span>
+<span class="nc" id="L607">        }</span>
+<span class="nc bnc" id="L608" title="All 4 branches missed.">        if (args != null &amp;&amp; args.trim().equals(&quot;--clear&quot;)) {</span>
+<span class="nc" id="L609">            userManager.clearNotifications(username);</span>
+<span class="nc" id="L610">            System.out.println(ANSI_GREEN + &quot;Notifications cleared&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L612">        int unread = messageStore.getUnreadCount(username);</span>
+<span class="nc bnc" id="L613" title="All 2 branches missed.">        if (unread &gt; 0) {</span>
+<span class="nc" id="L614">            System.out.println(ANSI_YELLOW + &quot;You have &quot; + unread + &quot; unread private message(s)&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L616">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L617">        return &quot;&quot;;</span>
+    }
+
+    private String handleMeAction(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L621" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L622">            return ANSI_RED + &quot;Usage: /me &lt;action&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L624">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;));</span>
+<span class="nc" id="L625">        String actionText = username + &quot; &quot; + args.trim();</span>
+<span class="nc" id="L626">        System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] * &quot; + ANSI_BOLD + actionText + ANSI_RESET);</span>
+<span class="nc" id="L627">        chatEngine.sendMessage(username, currentRoom, &quot;* &quot; + actionText, &quot;action&quot;,</span>
+<span class="nc" id="L628">                System.currentTimeMillis(), false, null, 0);</span>
+<span class="nc" id="L629">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L630">        return &quot;&quot;;</span>
+    }
+
+    private String handleClear(String args, String username, String currentRoom) {
+        // ANSI escape to clear screen
+<span class="nc" id="L635">        System.out.print(&quot;\033[H\033[2J&quot;);</span>
+<span class="nc" id="L636">        System.out.flush();</span>
+<span class="nc" id="L637">        System.out.println(ANSI_CYAN + &quot;Screen cleared. You are in #&quot; + currentRoom + ANSI_RESET);</span>
+<span class="nc" id="L638">        return &quot;&quot;;</span>
+    }
+
+    private String handleBio(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L642" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L643">            Map&lt;String, String&gt; profile = userManager.getUserProfile(username);</span>
+<span class="nc bnc" id="L644" title="All 2 branches missed.">            if (profile == null) {</span>
+<span class="nc" id="L645">                return ANSI_RED + &quot;Profile not found&quot; + ANSI_RESET;</span>
+            }
+<span class="nc" id="L647">            String bio = profile.getOrDefault(&quot;bio&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L648" title="All 2 branches missed.">            if (bio.isEmpty()) {</span>
+<span class="nc" id="L649">                return ANSI_YELLOW + &quot;You have not set a bio yet. Use /bio &lt;text&gt; to set one.&quot; + ANSI_RESET;</span>
+            }
+<span class="nc" id="L651">            return ANSI_CYAN + &quot;Your bio: &quot; + bio + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L653" title="All 2 branches missed.">        if (args.trim().length() &gt; 200) {</span>
+<span class="nc" id="L654">            return ANSI_RED + &quot;Bio too long (max 200 chars)&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L656">        userManager.updateBio(username, args.trim());</span>
+<span class="nc" id="L657">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L658">        return &quot;&quot;;</span>
+    }
+
+    private String handleAddFriend(String args, String username, String currentRoom) {
+<span class="nc bnc" id="L662" title="All 4 branches missed.">        if (args == null || args.trim().isEmpty()) {</span>
+<span class="nc" id="L663">            return ANSI_RED + &quot;Usage: /addfriend &lt;username&gt;&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L665">        String targetUser = args.trim().split(&quot;\\s+&quot;)[0];</span>
+<span class="nc bnc" id="L666" title="All 2 branches missed.">        if (targetUser.isEmpty()) {</span>
+<span class="nc" id="L667">            return ANSI_RED + &quot;Username cannot be empty&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L669" title="All 2 branches missed.">        if (targetUser.equals(username)) {</span>
+<span class="nc" id="L670">            return ANSI_RED + &quot;Cannot add yourself as a friend&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L672" title="All 2 branches missed.">        if (!userManager.isUsernameTaken(targetUser)) {</span>
+<span class="nc" id="L673">            return ANSI_RED + &quot;User '&quot; + targetUser + &quot;' not found&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L675">        userManager.addFriend(username, targetUser);</span>
+<span class="nc" id="L676">        userManager.addNotification(targetUser, username + &quot; added you as a friend&quot;);</span>
+<span class="nc" id="L677">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L678">        return &quot;&quot;;</span>
+    }
+
+    private String handleMentions(String args, String username, String currentRoom) {
+<span class="nc" id="L682">        List&lt;String&gt; mentions = chatEngine.getUserMentions(username);</span>
+<span class="nc bnc" id="L683" title="All 2 branches missed.">        if (mentions.isEmpty()) {</span>
+<span class="nc" id="L684">            return ANSI_YELLOW + &quot;No recent mentions&quot; + ANSI_RESET;</span>
+        }
+<span class="nc" id="L686">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Recent Mentions ===&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L687" title="All 2 branches missed.">        for (String mention : mentions) {</span>
+<span class="nc" id="L688">            System.out.println(ANSI_YELLOW + &quot;  • &quot; + mention + ANSI_RESET);</span>
+<span class="nc" id="L689">        }</span>
+<span class="nc bnc" id="L690" title="All 4 branches missed.">        if (args != null &amp;&amp; args.trim().equals(&quot;--clear&quot;)) {</span>
+<span class="nc" id="L691">            chatEngine.clearUserMentions(username);</span>
+<span class="nc" id="L692">            System.out.println(ANSI_GREEN + &quot;Mentions cleared&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L694">        userManager.updateLastActive(username);</span>
+<span class="nc" id="L695">        return &quot;&quot;;</span>
+    }
+
+    public List&lt;String&gt; getCommandLog() {
+<span class="nc" id="L699">        return commandLog;</span>
+    }
+
+    public Map&lt;String, Integer&gt; getCommandUsageCount() {
+<span class="nc" id="L703">        return commandUsageCount;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

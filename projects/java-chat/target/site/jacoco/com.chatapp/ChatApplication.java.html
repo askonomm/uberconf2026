@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatApplication.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">ChatApplication.java</span></div><h1>ChatApplication.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.io.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Main entry point for the Java TUI Chat Application.
+ * Handles startup, configuration, and the main input loop.
+ */
+public class ChatApplication {
+
+    // ANSI color codes
+    public static final String RESET = &quot;\u001B[0m&quot;;
+    public static final String RED = &quot;\u001B[31m&quot;;
+    public static final String GREEN = &quot;\u001B[32m&quot;;
+    public static final String YELLOW = &quot;\u001B[33m&quot;;
+    public static final String BLUE = &quot;\u001B[34m&quot;;
+    public static final String PURPLE = &quot;\u001B[35m&quot;;
+    public static final String CYAN = &quot;\u001B[36m&quot;;
+    public static final String WHITE = &quot;\u001B[37m&quot;;
+    public static final String BOLD = &quot;\u001B[1m&quot;;
+    public static final String UNDERLINE = &quot;\u001B[4m&quot;;
+
+    private static final String APP_VERSION = &quot;1.0.0&quot;;
+    private static final String APP_NAME = &quot;JavaChat&quot;;
+    private static final int MAX_USERNAME_LENGTH = 20;
+    private static final int MIN_USERNAME_LENGTH = 3;
+    private static final int DEFAULT_HISTORY_LIMIT = 50;
+    private static final String DEFAULT_ROOM = &quot;general&quot;;
+
+    private ChatEngine chatEngine;
+    private UserManager userManager;
+    private RoomManager roomManager;
+    private MessageStore messageStore;
+    private CommandProcessor commandProcessor;
+    private DisplayRenderer displayRenderer;
+
+    private String currentUsername;
+    private String currentRoom;
+    private boolean running;
+    private boolean debugMode;
+    private int sessionMessageCount;
+    private long sessionStartTime;
+    private List&lt;String&gt; commandHistory;
+    private Map&lt;String, Integer&gt; roomVisitCount;
+    private boolean colorEnabled;
+    private Scanner inputScanner;
+
+<span class="nc" id="L51">    public ChatApplication() {</span>
+<span class="nc" id="L52">        this.chatEngine = new ChatEngine();</span>
+<span class="nc" id="L53">        this.userManager = new UserManager();</span>
+<span class="nc" id="L54">        this.roomManager = new RoomManager();</span>
+<span class="nc" id="L55">        this.messageStore = new MessageStore();</span>
+<span class="nc" id="L56">        this.commandProcessor = new CommandProcessor(chatEngine, userManager, roomManager, messageStore);</span>
+<span class="nc" id="L57">        this.displayRenderer = new DisplayRenderer();</span>
+<span class="nc" id="L58">        this.running = false;</span>
+<span class="nc" id="L59">        this.debugMode = false;</span>
+<span class="nc" id="L60">        this.sessionMessageCount = 0;</span>
+<span class="nc" id="L61">        this.sessionStartTime = System.currentTimeMillis();</span>
+<span class="nc" id="L62">        this.commandHistory = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L63">        this.roomVisitCount = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L64">        this.colorEnabled = true;</span>
+<span class="nc" id="L65">        this.inputScanner = new Scanner(System.in);</span>
+<span class="nc" id="L66">    }</span>
+
+    public static void main(String[] args) {
+<span class="nc" id="L69">        ChatApplication app = new ChatApplication();</span>
+<span class="nc" id="L70">        app.parseArgs(args);</span>
+<span class="nc" id="L71">        app.run();</span>
+<span class="nc" id="L72">    }</span>
+
+    public void parseArgs(String[] args) {
+<span class="nc bnc" id="L75" title="All 4 branches missed.">        if (args == null || args.length == 0) {</span>
+<span class="nc" id="L76">            return;</span>
+        }
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        for (int i = 0; i &lt; args.length; i++) {</span>
+<span class="nc bnc" id="L79" title="All 4 branches missed.">            if (args[i].equals(&quot;--debug&quot;) || args[i].equals(&quot;-d&quot;)) {</span>
+<span class="nc" id="L80">                debugMode = true;</span>
+<span class="nc" id="L81">                System.out.println(&quot;Debug mode enabled&quot;);</span>
+<span class="nc bnc" id="L82" title="All 4 branches missed.">            } else if (args[i].equals(&quot;--no-color&quot;) || args[i].equals(&quot;-n&quot;)) {</span>
+<span class="nc" id="L83">                colorEnabled = false;</span>
+<span class="nc bnc" id="L84" title="All 4 branches missed.">            } else if (args[i].equals(&quot;--version&quot;) || args[i].equals(&quot;-v&quot;)) {</span>
+<span class="nc" id="L85">                System.out.println(APP_NAME + &quot; version &quot; + APP_VERSION);</span>
+<span class="nc" id="L86">                System.exit(0);</span>
+<span class="nc bnc" id="L87" title="All 4 branches missed.">            } else if (args[i].equals(&quot;--help&quot;) || args[i].equals(&quot;-h&quot;)) {</span>
+<span class="nc" id="L88">                System.out.println(&quot;Usage: java -jar java-chat.jar [options]&quot;);</span>
+<span class="nc" id="L89">                System.out.println(&quot;Options:&quot;);</span>
+<span class="nc" id="L90">                System.out.println(&quot;  --debug, -d      Enable debug mode&quot;);</span>
+<span class="nc" id="L91">                System.out.println(&quot;  --no-color, -n   Disable color output&quot;);</span>
+<span class="nc" id="L92">                System.out.println(&quot;  --version, -v    Show version&quot;);</span>
+<span class="nc" id="L93">                System.out.println(&quot;  --help, -h       Show this help&quot;);</span>
+<span class="nc" id="L94">                System.exit(0);</span>
+<span class="nc bnc" id="L95" title="All 4 branches missed.">            } else if (args[i].equals(&quot;--user&quot;) || args[i].equals(&quot;-u&quot;)) {</span>
+<span class="nc bnc" id="L96" title="All 2 branches missed.">                if (i + 1 &lt; args.length) {</span>
+<span class="nc" id="L97">                    currentUsername = args[++i];</span>
+                } else {
+<span class="nc" id="L99">                    System.err.println(&quot;Error: --user requires a username argument&quot;);</span>
+<span class="nc" id="L100">                    System.exit(1);</span>
+                }
+<span class="nc bnc" id="L102" title="All 4 branches missed.">            } else if (args[i].equals(&quot;--room&quot;) || args[i].equals(&quot;-r&quot;)) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if (i + 1 &lt; args.length) {</span>
+<span class="nc" id="L104">                    currentRoom = args[++i];</span>
+                } else {
+<span class="nc" id="L106">                    System.err.println(&quot;Error: --room requires a room argument&quot;);</span>
+<span class="nc" id="L107">                    System.exit(1);</span>
+                }
+            } else {
+<span class="nc" id="L110">                System.err.println(&quot;Warning: Unknown argument: &quot; + args[i]);</span>
+            }
+        }
+<span class="nc" id="L113">    }</span>
+
+    public void run() {
+<span class="nc" id="L116">        printWelcomeBanner();</span>
+<span class="nc bnc" id="L117" title="All 4 branches missed.">        if (currentUsername == null || currentUsername.isEmpty()) {</span>
+<span class="nc" id="L118">            currentUsername = promptForUsername();</span>
+        } else {
+            // Validate provided username
+<span class="nc bnc" id="L121" title="All 2 branches missed.">            if (currentUsername.length() &lt; MIN_USERNAME_LENGTH) {</span>
+<span class="nc" id="L122">                System.out.println(RED + &quot;Username too short, must be at least &quot; + MIN_USERNAME_LENGTH + &quot; characters&quot; + RESET);</span>
+<span class="nc" id="L123">                currentUsername = promptForUsername();</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            } else if (currentUsername.length() &gt; MAX_USERNAME_LENGTH) {</span>
+<span class="nc" id="L125">                System.out.println(RED + &quot;Username too long, must be at most &quot; + MAX_USERNAME_LENGTH + &quot; characters&quot; + RESET);</span>
+<span class="nc" id="L126">                currentUsername = promptForUsername();</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            } else if (!currentUsername.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L128">                System.out.println(RED + &quot;Username can only contain letters, numbers, and underscores&quot; + RESET);</span>
+<span class="nc" id="L129">                currentUsername = promptForUsername();</span>
+            }
+        }
+
+<span class="nc" id="L133">        userManager.registerUser(currentUsername);</span>
+
+<span class="nc bnc" id="L135" title="All 4 branches missed.">        if (currentRoom == null || currentRoom.isEmpty()) {</span>
+<span class="nc" id="L136">            currentRoom = DEFAULT_ROOM;</span>
+        }
+
+<span class="nc" id="L139">        roomManager.createRoomIfNotExists(currentRoom);</span>
+<span class="nc" id="L140">        roomManager.joinRoom(currentUsername, currentRoom);</span>
+<span class="nc" id="L141">        roomVisitCount.put(currentRoom, 1);</span>
+
+<span class="nc" id="L143">        displayRenderer.printSystemMessage(&quot;Welcome, &quot; + currentUsername + &quot;! You are in room: &quot; + currentRoom);</span>
+<span class="nc" id="L144">        displayRenderer.printSystemMessage(&quot;Type /help for available commands&quot;);</span>
+
+<span class="nc" id="L146">        running = true;</span>
+<span class="nc" id="L147">        mainLoop();</span>
+<span class="nc" id="L148">    }</span>
+
+    private String promptForUsername() {
+<span class="nc" id="L151">        String username = null;</span>
+<span class="nc" id="L152">        boolean valid = false;</span>
+<span class="nc" id="L153">        int attempts = 0;</span>
+<span class="nc bnc" id="L154" title="All 4 branches missed.">        while (!valid &amp;&amp; attempts &lt; 5) {</span>
+<span class="nc" id="L155">            attempts++;</span>
+<span class="nc" id="L156">            System.out.print(CYAN + &quot;Enter your username: &quot; + RESET);</span>
+<span class="nc" id="L157">            username = inputScanner.nextLine().trim();</span>
+<span class="nc bnc" id="L158" title="All 2 branches missed.">            if (username.isEmpty()) {</span>
+<span class="nc" id="L159">                System.out.println(RED + &quot;Username cannot be empty&quot; + RESET);</span>
+<span class="nc" id="L160">                continue;</span>
+            }
+<span class="nc bnc" id="L162" title="All 2 branches missed.">            if (username.length() &lt; MIN_USERNAME_LENGTH) {</span>
+<span class="nc" id="L163">                System.out.println(RED + &quot;Username must be at least &quot; + MIN_USERNAME_LENGTH + &quot; characters long&quot; + RESET);</span>
+<span class="nc" id="L164">                continue;</span>
+            }
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            if (username.length() &gt; MAX_USERNAME_LENGTH) {</span>
+<span class="nc" id="L167">                System.out.println(RED + &quot;Username cannot be longer than &quot; + MAX_USERNAME_LENGTH + &quot; characters&quot; + RESET);</span>
+<span class="nc" id="L168">                continue;</span>
+            }
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            if (!username.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L171">                System.out.println(RED + &quot;Username can only contain letters, numbers, and underscores&quot; + RESET);</span>
+<span class="nc" id="L172">                continue;</span>
+            }
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            if (userManager.isUsernameTaken(username)) {</span>
+<span class="nc" id="L175">                System.out.println(RED + &quot;Username '&quot; + username + &quot;' is already taken, please choose another&quot; + RESET);</span>
+<span class="nc" id="L176">                continue;</span>
+            }
+<span class="nc" id="L178">            valid = true;</span>
+        }
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (!valid) {</span>
+<span class="nc" id="L181">            System.out.println(RED + &quot;Too many failed attempts. Using default username: user&quot; + (int)(Math.random() * 1000) + RESET);</span>
+<span class="nc" id="L182">            username = &quot;user&quot; + (int)(Math.random() * 1000);</span>
+        }
+<span class="nc" id="L184">        return username;</span>
+    }
+
+    private void mainLoop() {
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        while (running) {</span>
+            try {
+<span class="nc" id="L190">                String prompt = buildPrompt();</span>
+<span class="nc" id="L191">                System.out.print(prompt);</span>
+<span class="nc bnc" id="L192" title="All 2 branches missed.">                if (!inputScanner.hasNextLine()) {</span>
+<span class="nc" id="L193">                    running = false;</span>
+<span class="nc" id="L194">                    break;</span>
+                }
+<span class="nc" id="L196">                String input = inputScanner.nextLine();</span>
+<span class="nc bnc" id="L197" title="All 2 branches missed.">                if (input == null) {</span>
+<span class="nc" id="L198">                    continue;</span>
+                }
+<span class="nc" id="L200">                input = input.trim();</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">                if (input.isEmpty()) {</span>
+<span class="nc" id="L202">                    continue;</span>
+                }
+<span class="nc" id="L204">                commandHistory.add(input);</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">                if (commandHistory.size() &gt; 100) {</span>
+<span class="nc" id="L206">                    commandHistory.remove(0);</span>
+                }
+<span class="nc bnc" id="L208" title="All 2 branches missed.">                if (debugMode) {</span>
+<span class="nc" id="L209">                    System.out.println(&quot;[DEBUG] Input: &quot; + input);</span>
+<span class="nc" id="L210">                    System.out.println(&quot;[DEBUG] Current room: &quot; + currentRoom);</span>
+<span class="nc" id="L211">                    System.out.println(&quot;[DEBUG] Session messages: &quot; + sessionMessageCount);</span>
+                }
+<span class="nc bnc" id="L213" title="All 2 branches missed.">                if (input.startsWith(&quot;/&quot;)) {</span>
+<span class="nc" id="L214">                    String result = commandProcessor.processCommand(input, currentUsername, currentRoom);</span>
+<span class="nc bnc" id="L215" title="All 2 branches missed.">                    if (result != null) {</span>
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                        if (result.startsWith(&quot;SWITCH_ROOM:&quot;)) {</span>
+<span class="nc" id="L217">                            String newRoom = result.substring(&quot;SWITCH_ROOM:&quot;.length());</span>
+<span class="nc" id="L218">                            currentRoom = newRoom;</span>
+<span class="nc bnc" id="L219" title="All 2 branches missed.">                            if (roomVisitCount.containsKey(currentRoom)) {</span>
+<span class="nc" id="L220">                                roomVisitCount.put(currentRoom, roomVisitCount.get(currentRoom) + 1);</span>
+                            } else {
+<span class="nc" id="L222">                                roomVisitCount.put(currentRoom, 1);</span>
+                            }
+<span class="nc" id="L224">                            displayRenderer.printSystemMessage(&quot;Switched to room: &quot; + currentRoom);</span>
+<span class="nc bnc" id="L225" title="All 2 branches missed.">                        } else if (result.equals(&quot;QUIT&quot;)) {</span>
+<span class="nc" id="L226">                            running = false;</span>
+<span class="nc" id="L227">                            handleGracefulShutdown();</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">                        } else if (result.startsWith(&quot;ERROR:&quot;)) {</span>
+<span class="nc" id="L229">                            displayRenderer.printErrorMessage(result.substring(6));</span>
+<span class="nc bnc" id="L230" title="All 2 branches missed.">                        } else if (!result.isEmpty()) {</span>
+<span class="nc" id="L231">                            System.out.println(result);</span>
+                        }
+                    }
+<span class="nc" id="L234">                } else {</span>
+                    // Regular chat message
+<span class="nc bnc" id="L236" title="All 2 branches missed.">                    if (input.length() &gt; 500) {</span>
+<span class="nc" id="L237">                        displayRenderer.printErrorMessage(&quot;Message too long (max 500 characters)&quot;);</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">                    } else if (input.length() == 0) {</span>
+                        // empty, do nothing
+                    } else {
+<span class="nc" id="L241">                        chatEngine.sendMessage(currentUsername, currentRoom, input, &quot;public&quot;,</span>
+<span class="nc" id="L242">                                System.currentTimeMillis(), false, null, sessionMessageCount);</span>
+<span class="nc" id="L243">                        sessionMessageCount++;</span>
+<span class="nc bnc" id="L244" title="All 2 branches missed.">                        if (sessionMessageCount % 100 == 0) {</span>
+<span class="nc" id="L245">                            displayRenderer.printSystemMessage(&quot;You have sent &quot; + sessionMessageCount + &quot; messages this session!&quot;);</span>
+                        }
+                    }
+                }
+<span class="nc" id="L249">            } catch (Exception e) {</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">                if (debugMode) {</span>
+<span class="nc" id="L251">                    e.printStackTrace();</span>
+                }
+<span class="nc" id="L253">                displayRenderer.printErrorMessage(&quot;An error occurred: &quot; + e.getMessage());</span>
+<span class="nc" id="L254">            }</span>
+        }
+<span class="nc" id="L256">        System.out.println(CYAN + &quot;Goodbye, &quot; + currentUsername + &quot;!&quot; + RESET);</span>
+<span class="nc" id="L257">    }</span>
+
+    private String buildPrompt() {
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        if (!colorEnabled) {</span>
+<span class="nc" id="L261">            return &quot;[&quot; + currentUsername + &quot;@&quot; + currentRoom + &quot;] &gt; &quot;;</span>
+        }
+<span class="nc" id="L263">        String roomColor = BLUE;</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">        if (currentRoom.equals(&quot;general&quot;)) {</span>
+<span class="nc" id="L265">            roomColor = GREEN;</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        } else if (currentRoom.equals(&quot;random&quot;)) {</span>
+<span class="nc" id="L267">            roomColor = YELLOW;</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        } else if (currentRoom.equals(&quot;help&quot;)) {</span>
+<span class="nc" id="L269">            roomColor = CYAN;</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">        } else if (currentRoom.startsWith(&quot;private-&quot;)) {</span>
+<span class="nc" id="L271">            roomColor = PURPLE;</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        } else if (currentRoom.equals(&quot;announcements&quot;)) {</span>
+<span class="nc" id="L273">            roomColor = RED;</span>
+        }
+<span class="nc" id="L275">        return BOLD + &quot;[&quot; + GREEN + currentUsername + RESET + BOLD + &quot;@&quot; + roomColor + currentRoom + RESET + BOLD + &quot;] &gt; &quot; + RESET;</span>
+    }
+
+    private void handleGracefulShutdown() {
+<span class="nc" id="L279">        long sessionDuration = System.currentTimeMillis() - sessionStartTime;</span>
+<span class="nc" id="L280">        long seconds = sessionDuration / 1000;</span>
+<span class="nc" id="L281">        long minutes = seconds / 60;</span>
+<span class="nc" id="L282">        long hours = minutes / 60;</span>
+<span class="nc" id="L283">        displayRenderer.printSystemMessage(&quot;Session summary:&quot;);</span>
+<span class="nc" id="L284">        displayRenderer.printSystemMessage(&quot;  Duration: &quot; + hours + &quot;h &quot; + (minutes % 60) + &quot;m &quot; + (seconds % 60) + &quot;s&quot;);</span>
+<span class="nc" id="L285">        displayRenderer.printSystemMessage(&quot;  Messages sent: &quot; + sessionMessageCount);</span>
+<span class="nc" id="L286">        displayRenderer.printSystemMessage(&quot;  Commands executed: &quot; + commandHistory.size());</span>
+<span class="nc" id="L287">        displayRenderer.printSystemMessage(&quot;  Rooms visited: &quot; + roomVisitCount.size());</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        if (!roomVisitCount.isEmpty()) {</span>
+<span class="nc" id="L289">            String mostVisited = null;</span>
+<span class="nc" id="L290">            int maxVisits = 0;</span>
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            for (Map.Entry&lt;String, Integer&gt; entry : roomVisitCount.entrySet()) {</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">                if (entry.getValue() &gt; maxVisits) {</span>
+<span class="nc" id="L293">                    maxVisits = entry.getValue();</span>
+<span class="nc" id="L294">                    mostVisited = entry.getKey();</span>
+                }
+<span class="nc" id="L296">            }</span>
+<span class="nc bnc" id="L297" title="All 2 branches missed.">            if (mostVisited != null) {</span>
+<span class="nc" id="L298">                displayRenderer.printSystemMessage(&quot;  Most visited room: &quot; + mostVisited + &quot; (&quot; + maxVisits + &quot; visits)&quot;);</span>
+            }
+        }
+<span class="nc" id="L301">        roomManager.leaveRoom(currentUsername, currentRoom);</span>
+<span class="nc" id="L302">        userManager.unregisterUser(currentUsername);</span>
+<span class="nc" id="L303">    }</span>
+
+    private void printWelcomeBanner() {
+<span class="nc" id="L306">        System.out.println();</span>
+<span class="nc" id="L307">        System.out.println(CYAN + BOLD + &quot;╔══════════════════════════════════════════════╗&quot; + RESET);</span>
+<span class="nc" id="L308">        System.out.println(CYAN + BOLD + &quot;║         &quot; + GREEN + &quot;JavaChat TUI v&quot; + APP_VERSION + CYAN + &quot;                    ║&quot; + RESET);</span>
+<span class="nc" id="L309">        System.out.println(CYAN + BOLD + &quot;║   &quot; + WHITE + &quot;Multi-Room Terminal Chat Application&quot; + CYAN + &quot;       ║&quot; + RESET);</span>
+<span class="nc" id="L310">        System.out.println(CYAN + BOLD + &quot;╚══════════════════════════════════════════════╝&quot; + RESET);</span>
+<span class="nc" id="L311">        System.out.println();</span>
+<span class="nc" id="L312">    }</span>
+
+    // Getters for testing
+<span class="nc" id="L315">    public String getCurrentUsername() { return currentUsername; }</span>
+<span class="nc" id="L316">    public String getCurrentRoom() { return currentRoom; }</span>
+<span class="nc" id="L317">    public boolean isRunning() { return running; }</span>
+<span class="nc" id="L318">    public boolean isDebugMode() { return debugMode; }</span>
+<span class="nc" id="L319">    public int getSessionMessageCount() { return sessionMessageCount; }</span>
+<span class="nc" id="L320">    public List&lt;String&gt; getCommandHistory() { return commandHistory; }</span>
+<span class="nc" id="L321">    public ChatEngine getChatEngine() { return chatEngine; }</span>
+<span class="nc" id="L322">    public UserManager getUserManager() { return userManager; }</span>
+<span class="nc" id="L323">    public RoomManager getRoomManager() { return roomManager; }</span>
+<span class="nc" id="L324">    public MessageStore getMessageStore() { return messageStore; }</span>
+
+    // Process configuration loaded from environment or properties - called during startup
+    private void applyConfiguration(Map&lt;String, String&gt; config) {
+<span class="nc bnc" id="L328" title="All 4 branches missed.">        if (config == null || config.isEmpty()) {</span>
+<span class="nc" id="L329">            return;</span>
+        }
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        for (Map.Entry&lt;String, String&gt; entry : config.entrySet()) {</span>
+<span class="nc" id="L332">            String key = entry.getKey();</span>
+<span class="nc" id="L333">            String value = entry.getValue();</span>
+<span class="nc bnc" id="L334" title="All 4 branches missed.">            if (key == null || value == null) {</span>
+<span class="nc" id="L335">                continue;</span>
+            }
+<span class="nc bnc" id="L337" title="All 4 branches missed.">            if (key.equals(&quot;debug&quot;) || key.equals(&quot;DEBUG&quot;)) {</span>
+<span class="nc bnc" id="L338" title="All 4 branches missed.">                if (value.equalsIgnoreCase(&quot;true&quot;) || value.equals(&quot;1&quot;)) {</span>
+<span class="nc" id="L339">                    debugMode = true;</span>
+<span class="nc" id="L340">                    System.out.println(&quot;[DEBUG] Debug mode enabled via config&quot;);</span>
+<span class="nc bnc" id="L341" title="All 4 branches missed.">                } else if (value.equalsIgnoreCase(&quot;false&quot;) || value.equals(&quot;0&quot;)) {</span>
+<span class="nc" id="L342">                    debugMode = false;</span>
+                } else {
+<span class="nc" id="L344">                    System.out.println(YELLOW + &quot;Warning: invalid value for debug: &quot; + value + RESET);</span>
+                }
+<span class="nc bnc" id="L346" title="All 4 branches missed.">            } else if (key.equals(&quot;color&quot;) || key.equals(&quot;COLOR&quot;)) {</span>
+<span class="nc bnc" id="L347" title="All 4 branches missed.">                if (value.equalsIgnoreCase(&quot;false&quot;) || value.equals(&quot;0&quot;)) {</span>
+<span class="nc" id="L348">                    colorEnabled = false;</span>
+<span class="nc bnc" id="L349" title="All 4 branches missed.">                } else if (value.equalsIgnoreCase(&quot;true&quot;) || value.equals(&quot;1&quot;)) {</span>
+<span class="nc" id="L350">                    colorEnabled = true;</span>
+                } else {
+<span class="nc" id="L352">                    System.out.println(YELLOW + &quot;Warning: invalid value for color: &quot; + value + RESET);</span>
+                }
+<span class="nc bnc" id="L354" title="All 4 branches missed.">            } else if (key.equals(&quot;username&quot;) || key.equals(&quot;USER&quot;)) {</span>
+<span class="nc bnc" id="L355" title="All 4 branches missed.">                if (currentUsername == null || currentUsername.isEmpty()) {</span>
+<span class="nc bnc" id="L356" title="All 4 branches missed.">                    if (value.length() &gt;= MIN_USERNAME_LENGTH &amp;&amp; value.length() &lt;= MAX_USERNAME_LENGTH &amp;&amp;</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">                            value.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L358">                        currentUsername = value;</span>
+                    } else {
+<span class="nc" id="L360">                        System.out.println(YELLOW + &quot;Warning: invalid username in config: &quot; + value + RESET);</span>
+                    }
+                }
+<span class="nc bnc" id="L363" title="All 4 branches missed.">            } else if (key.equals(&quot;room&quot;) || key.equals(&quot;ROOM&quot;)) {</span>
+<span class="nc bnc" id="L364" title="All 6 branches missed.">                if (value.length() &gt;= 2 &amp;&amp; value.length() &lt;= 30 &amp;&amp; value.matches(&quot;[a-zA-Z0-9_-]+&quot;)) {</span>
+<span class="nc" id="L365">                    currentRoom = value;</span>
+                } else {
+<span class="nc" id="L367">                    System.out.println(YELLOW + &quot;Warning: invalid room name in config: &quot; + value + RESET);</span>
+                }
+<span class="nc bnc" id="L369" title="All 4 branches missed.">            } else if (key.equals(&quot;historyLimit&quot;) || key.equals(&quot;HISTORY_LIMIT&quot;)) {</span>
+                try {
+<span class="nc" id="L371">                    int limit = Integer.parseInt(value);</span>
+<span class="nc bnc" id="L372" title="All 4 branches missed.">                    if (limit &lt; 1 || limit &gt; 1000) {</span>
+<span class="nc" id="L373">                        System.out.println(YELLOW + &quot;Warning: historyLimit out of range (1-1000): &quot; + value + RESET);</span>
+                    } else {
+                        // stored but no field to apply to in current impl
+                    }
+<span class="nc" id="L377">                } catch (NumberFormatException e) {</span>
+<span class="nc" id="L378">                    System.out.println(YELLOW + &quot;Warning: invalid historyLimit value: &quot; + value + RESET);</span>
+<span class="nc" id="L379">                }</span>
+<span class="nc bnc" id="L380" title="All 4 branches missed.">            } else if (key.equals(&quot;profanityFilter&quot;) || key.equals(&quot;PROFANITY_FILTER&quot;)) {</span>
+<span class="nc bnc" id="L381" title="All 4 branches missed.">                if (value.equalsIgnoreCase(&quot;true&quot;) || value.equals(&quot;1&quot;)) {</span>
+<span class="nc" id="L382">                    chatEngine.setProfanityFilterEnabled(true);</span>
+<span class="nc bnc" id="L383" title="All 4 branches missed.">                } else if (value.equalsIgnoreCase(&quot;false&quot;) || value.equals(&quot;0&quot;)) {</span>
+<span class="nc" id="L384">                    chatEngine.setProfanityFilterEnabled(false);</span>
+                } else {
+<span class="nc" id="L386">                    System.out.println(YELLOW + &quot;Warning: invalid profanityFilter value: &quot; + value + RESET);</span>
+                }
+<span class="nc bnc" id="L388" title="All 4 branches missed.">            } else if (key.equals(&quot;rateLimit&quot;) || key.equals(&quot;RATE_LIMIT&quot;)) {</span>
+<span class="nc bnc" id="L389" title="All 4 branches missed.">                if (value.equalsIgnoreCase(&quot;true&quot;) || value.equals(&quot;1&quot;)) {</span>
+<span class="nc" id="L390">                    chatEngine.setRateLimitEnabled(true);</span>
+<span class="nc bnc" id="L391" title="All 4 branches missed.">                } else if (value.equalsIgnoreCase(&quot;false&quot;) || value.equals(&quot;0&quot;)) {</span>
+<span class="nc" id="L392">                    chatEngine.setRateLimitEnabled(false);</span>
+                } else {
+<span class="nc" id="L394">                    System.out.println(YELLOW + &quot;Warning: invalid rateLimit value: &quot; + value + RESET);</span>
+                }
+<span class="nc bnc" id="L396" title="All 4 branches missed.">            } else if (key.startsWith(&quot;room.&quot;) &amp;&amp; key.length() &gt; 5) {</span>
+<span class="nc" id="L397">                String roomName = key.substring(5);</span>
+<span class="nc bnc" id="L398" title="All 2 branches missed.">                if (roomName.isEmpty()) {</span>
+<span class="nc" id="L399">                    System.out.println(YELLOW + &quot;Warning: empty room name in config key: &quot; + key + RESET);</span>
+<span class="nc bnc" id="L400" title="All 4 branches missed.">                } else if (roomName.length() &lt; 2 || roomName.length() &gt; 30) {</span>
+<span class="nc" id="L401">                    System.out.println(YELLOW + &quot;Warning: room name length invalid in config: &quot; + roomName + RESET);</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">                } else if (!roomName.matches(&quot;[a-zA-Z0-9_-]+&quot;)) {</span>
+<span class="nc" id="L403">                    System.out.println(YELLOW + &quot;Warning: room name contains invalid chars: &quot; + roomName + RESET);</span>
+                } else {
+<span class="nc" id="L405">                    roomManager.createRoomIfNotExists(roomName);</span>
+                }
+<span class="nc" id="L407">            } else {</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">                if (debugMode) {</span>
+<span class="nc" id="L409">                    System.out.println(&quot;[DEBUG] Unknown config key: &quot; + key);</span>
+                }
+            }
+<span class="nc" id="L412">        }</span>
+<span class="nc" id="L413">    }</span>
+
+    // Load environment variable based config - called before run()
+    public Map&lt;String, String&gt; loadEnvironmentConfig() {
+<span class="nc" id="L417">        Map&lt;String, String&gt; config = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L418">        String[] envKeys = {&quot;JAVACHAT_DEBUG&quot;, &quot;JAVACHAT_COLOR&quot;, &quot;JAVACHAT_USER&quot;,</span>
+                &quot;JAVACHAT_ROOM&quot;, &quot;JAVACHAT_HISTORY_LIMIT&quot;, &quot;JAVACHAT_PROFANITY_FILTER&quot;, &quot;JAVACHAT_RATE_LIMIT&quot;};
+<span class="nc" id="L420">        String[] configKeys = {&quot;debug&quot;, &quot;color&quot;, &quot;username&quot;, &quot;room&quot;, &quot;historyLimit&quot;, &quot;profanityFilter&quot;, &quot;rateLimit&quot;};</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">        for (int i = 0; i &lt; envKeys.length; i++) {</span>
+<span class="nc" id="L422">            String envValue = System.getenv(envKeys[i]);</span>
+<span class="nc bnc" id="L423" title="All 4 branches missed.">            if (envValue != null &amp;&amp; !envValue.isEmpty()) {</span>
+<span class="nc" id="L424">                config.put(configKeys[i], envValue);</span>
+<span class="nc bnc" id="L425" title="All 2 branches missed.">                if (debugMode) {</span>
+<span class="nc" id="L426">                    System.out.println(&quot;[DEBUG] Loaded env config: &quot; + envKeys[i] + &quot;=&quot; + envValue);</span>
+                }
+            }
+        }
+<span class="nc" id="L430">        return config;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DisplayRenderer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">DisplayRenderer.java</span></div><h1>DisplayRenderer.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Handles all terminal rendering, formatting, and display concerns.
+ * Responsible for drawing the UI, formatting messages, and printing output.
+ */
+public class DisplayRenderer {
+
+    private static final String ANSI_RESET = &quot;\u001B[0m&quot;;
+    private static final String ANSI_RED = &quot;\u001B[31m&quot;;
+    private static final String ANSI_GREEN = &quot;\u001B[32m&quot;;
+    private static final String ANSI_YELLOW = &quot;\u001B[33m&quot;;
+    private static final String ANSI_BLUE = &quot;\u001B[34m&quot;;
+    private static final String ANSI_PURPLE = &quot;\u001B[35m&quot;;
+    private static final String ANSI_CYAN = &quot;\u001B[36m&quot;;
+    private static final String ANSI_WHITE = &quot;\u001B[37m&quot;;
+    private static final String ANSI_BOLD = &quot;\u001B[1m&quot;;
+    private static final String ANSI_UNDERLINE = &quot;\u001B[4m&quot;;
+    private static final String ANSI_BG_BLUE = &quot;\u001B[44m&quot;;
+    private static final String ANSI_BG_RED = &quot;\u001B[41m&quot;;
+    private static final String ANSI_BG_GREEN = &quot;\u001B[42m&quot;;
+
+    private static final int DEFAULT_TERMINAL_WIDTH = 80;
+    private static final int MAX_TERMINAL_WIDTH = 220;
+
+    private int terminalWidth;
+    private boolean colorEnabled;
+    private boolean timestampsEnabled;
+    private boolean compactMode;
+    private int messageDisplayCount;
+    private String lastSender;
+    private Map&lt;String, String&gt; userColorCache;
+    private List&lt;String&gt; displayHistory;
+    private boolean separatorsEnabled;
+    private String dateFormat;
+    private String timeFormat;
+<span class="nc" id="L41">    private static final String[] USER_COLORS = {</span>
+        ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_PURPLE, ANSI_CYAN, ANSI_WHITE
+    };
+
+<span class="nc" id="L45">    public DisplayRenderer() {</span>
+<span class="nc" id="L46">        this.terminalWidth = DEFAULT_TERMINAL_WIDTH;</span>
+<span class="nc" id="L47">        this.colorEnabled = true;</span>
+<span class="nc" id="L48">        this.timestampsEnabled = true;</span>
+<span class="nc" id="L49">        this.compactMode = false;</span>
+<span class="nc" id="L50">        this.messageDisplayCount = 0;</span>
+<span class="nc" id="L51">        this.lastSender = null;</span>
+<span class="nc" id="L52">        this.userColorCache = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L53">        this.displayHistory = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L54">        this.separatorsEnabled = true;</span>
+<span class="nc" id="L55">        this.dateFormat = &quot;yyyy-MM-dd&quot;;</span>
+<span class="nc" id="L56">        this.timeFormat = &quot;HH:mm:ss&quot;;</span>
+<span class="nc" id="L57">        detectTerminalWidth();</span>
+<span class="nc" id="L58">    }</span>
+
+    private void detectTerminalWidth() {
+        try {
+<span class="nc" id="L62">            String columns = System.getenv(&quot;COLUMNS&quot;);</span>
+<span class="nc bnc" id="L63" title="All 4 branches missed.">            if (columns != null &amp;&amp; !columns.isEmpty()) {</span>
+<span class="nc" id="L64">                int w = Integer.parseInt(columns);</span>
+<span class="nc bnc" id="L65" title="All 4 branches missed.">                if (w &gt; 20 &amp;&amp; w &lt;= MAX_TERMINAL_WIDTH) {</span>
+<span class="nc" id="L66">                    terminalWidth = w;</span>
+                }
+            }
+<span class="nc" id="L69">        } catch (Exception e) {</span>
+<span class="nc" id="L70">            terminalWidth = DEFAULT_TERMINAL_WIDTH;</span>
+<span class="nc" id="L71">        }</span>
+<span class="nc" id="L72">    }</span>
+
+    public void printMessage(String username, String content, String room, String type,
+                              long timestamp, boolean isSystem) {
+<span class="nc" id="L76">        messageDisplayCount++;</span>
+<span class="nc" id="L77">        String timeStr = formatTimestamp(timestamp);</span>
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if (isSystem || &quot;system&quot;.equals(type)) {</span>
+<span class="nc" id="L79">            printSystemMessage(content);</span>
+<span class="nc" id="L80">            return;</span>
+        }
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        if (&quot;action&quot;.equals(type)) {</span>
+<span class="nc" id="L83">            printActionMessage(username, content, timeStr);</span>
+<span class="nc" id="L84">            return;</span>
+        }
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (&quot;private&quot;.equals(type)) {</span>
+<span class="nc" id="L87">            printPrivateMessage(username, content, timeStr, false);</span>
+<span class="nc" id="L88">            return;</span>
+        }
+<span class="nc" id="L90">        String userColor = getCachedUserColor(username);</span>
+<span class="nc bnc" id="L91" title="All 4 branches missed.">        if (compactMode &amp;&amp; username.equals(lastSender)) {</span>
+<span class="nc" id="L92">            System.out.println(ANSI_WHITE + &quot;  &quot; + content + ANSI_RESET);</span>
+        } else {
+<span class="nc bnc" id="L94" title="All 6 branches missed.">            if (!compactMode &amp;&amp; separatorsEnabled &amp;&amp; messageDisplayCount &gt; 1 &amp;&amp;</span>
+<span class="nc bnc" id="L95" title="All 2 branches missed.">                    !username.equals(lastSender)) {</span>
+                // no separator, just continue
+            }
+<span class="nc" id="L98">            System.out.println(ANSI_WHITE + &quot;[&quot; + timeStr + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                    username + ANSI_RESET + ANSI_WHITE + &quot;: &quot; + content + ANSI_RESET);
+        }
+<span class="nc" id="L101">        lastSender = username;</span>
+<span class="nc" id="L102">        displayHistory.add(&quot;[&quot; + timeStr + &quot;] &quot; + username + &quot;: &quot; + content);</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if (displayHistory.size() &gt; 1000) {</span>
+<span class="nc" id="L104">            displayHistory.remove(0);</span>
+        }
+<span class="nc" id="L106">    }</span>
+
+    public void printSystemMessage(String content) {
+<span class="nc bnc" id="L109" title="All 2 branches missed.">        if (content == null) return;</span>
+<span class="nc" id="L110">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+<span class="nc" id="L111">        System.out.println(ANSI_CYAN + &quot;[&quot; + timeStr + &quot;] *** &quot; + content + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc" id="L112">        displayHistory.add(&quot;[&quot; + timeStr + &quot;] [SYSTEM] &quot; + content);</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if (displayHistory.size() &gt; 1000) {</span>
+<span class="nc" id="L114">            displayHistory.remove(0);</span>
+        }
+<span class="nc" id="L116">    }</span>
+
+    public void printErrorMessage(String content) {
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        if (content == null) return;</span>
+<span class="nc" id="L120">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+<span class="nc" id="L121">        System.out.println(ANSI_RED + &quot;[&quot; + timeStr + &quot;] [ERROR] &quot; + content + ANSI_RESET);</span>
+<span class="nc" id="L122">    }</span>
+
+    public void printWarningMessage(String content) {
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if (content == null) return;</span>
+<span class="nc" id="L126">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+<span class="nc" id="L127">        System.out.println(ANSI_YELLOW + &quot;[&quot; + timeStr + &quot;] [WARN] &quot; + content + ANSI_RESET);</span>
+<span class="nc" id="L128">    }</span>
+
+    public void printSuccessMessage(String content) {
+<span class="nc bnc" id="L131" title="All 2 branches missed.">        if (content == null) return;</span>
+<span class="nc" id="L132">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+<span class="nc" id="L133">        System.out.println(ANSI_GREEN + &quot;[&quot; + timeStr + &quot;] &quot; + content + ANSI_RESET);</span>
+<span class="nc" id="L134">    }</span>
+
+    public void printPrivateMessage(String fromUser, String content, String timeStr, boolean isIncoming) {
+<span class="nc bnc" id="L137" title="All 4 branches missed.">        if (fromUser == null || content == null) return;</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if (timeStr == null) {</span>
+<span class="nc" id="L139">            timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+        }
+<span class="nc" id="L141">        String fromColor = getCachedUserColor(fromUser);</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        if (isIncoming) {</span>
+<span class="nc" id="L143">            System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] [PM from &quot; + fromColor + ANSI_BOLD +</span>
+                    fromUser + ANSI_RESET + ANSI_PURPLE + &quot;] &quot; + content + ANSI_RESET);
+        } else {
+<span class="nc" id="L146">            System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] [PM to &quot; + fromColor + ANSI_BOLD +</span>
+                    fromUser + ANSI_RESET + ANSI_PURPLE + &quot;] &quot; + content + ANSI_RESET);
+        }
+<span class="nc" id="L149">        displayHistory.add(&quot;[&quot; + timeStr + &quot;] [PM] &quot; + fromUser + &quot;: &quot; + content);</span>
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if (displayHistory.size() &gt; 1000) {</span>
+<span class="nc" id="L151">            displayHistory.remove(0);</span>
+        }
+<span class="nc" id="L153">    }</span>
+
+    private void printActionMessage(String username, String content, String timeStr) {
+<span class="nc bnc" id="L156" title="All 4 branches missed.">        if (username == null || content == null) return;</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if (timeStr == null) {</span>
+<span class="nc" id="L158">            timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+        }
+<span class="nc" id="L160">        System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] * &quot; + ANSI_BOLD +</span>
+                username + &quot; &quot; + content + ANSI_RESET);
+<span class="nc" id="L162">        displayHistory.add(&quot;[&quot; + timeStr + &quot;] * &quot; + username + &quot; &quot; + content);</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        if (displayHistory.size() &gt; 1000) {</span>
+<span class="nc" id="L164">            displayHistory.remove(0);</span>
+        }
+<span class="nc" id="L166">    }</span>
+
+    public void printSeparator() {
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (!separatorsEnabled) return;</span>
+<span class="nc" id="L170">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L171">        sb.append(ANSI_BLUE);</span>
+<span class="nc bnc" id="L172" title="All 2 branches missed.">        for (int i = 0; i &lt; Math.min(terminalWidth, 80); i++) {</span>
+<span class="nc" id="L173">            sb.append(&quot;─&quot;);</span>
+        }
+<span class="nc" id="L175">        sb.append(ANSI_RESET);</span>
+<span class="nc" id="L176">        System.out.println(sb.toString());</span>
+<span class="nc" id="L177">    }</span>
+
+    public void printHeader(String title) {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if (title == null) return;</span>
+<span class="nc" id="L181">        int padding = Math.max(0, (terminalWidth - title.length() - 4) / 2);</span>
+<span class="nc" id="L182">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L183">        sb.append(ANSI_CYAN).append(ANSI_BOLD);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        for (int i = 0; i &lt; padding; i++) sb.append(&quot;═&quot;);</span>
+<span class="nc" id="L185">        sb.append(&quot; &quot;).append(title).append(&quot; &quot;);</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        for (int i = 0; i &lt; padding; i++) sb.append(&quot;═&quot;);</span>
+<span class="nc" id="L187">        sb.append(ANSI_RESET);</span>
+<span class="nc" id="L188">        System.out.println(sb.toString());</span>
+<span class="nc" id="L189">    }</span>
+
+    public void printTable(List&lt;String[]&gt; rows, String[] headers) {
+<span class="nc bnc" id="L192" title="All 4 branches missed.">        if (rows == null || headers == null) return;</span>
+<span class="nc" id="L193">        int[] colWidths = new int[headers.length];</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        for (int i = 0; i &lt; headers.length; i++) {</span>
+<span class="nc" id="L195">            colWidths[i] = headers[i].length();</span>
+        }
+<span class="nc bnc" id="L197" title="All 2 branches missed.">        for (String[] row : rows) {</span>
+<span class="nc bnc" id="L198" title="All 2 branches missed.">            for (int i = 0; i &lt; Math.min(row.length, headers.length); i++) {</span>
+<span class="nc bnc" id="L199" title="All 4 branches missed.">                if (row[i] != null &amp;&amp; row[i].length() &gt; colWidths[i]) {</span>
+<span class="nc" id="L200">                    colWidths[i] = row[i].length();</span>
+                }
+            }
+<span class="nc" id="L203">        }</span>
+        // Print header row
+<span class="nc" id="L205">        StringBuilder headerLine = new StringBuilder(ANSI_CYAN + ANSI_BOLD);</span>
+<span class="nc" id="L206">        StringBuilder separatorLine = new StringBuilder(ANSI_BLUE);</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        for (int i = 0; i &lt; headers.length; i++) {</span>
+<span class="nc" id="L208">            headerLine.append(padRight(headers[i], colWidths[i] + 2));</span>
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            for (int j = 0; j &lt; colWidths[i] + 2; j++) separatorLine.append(&quot;─&quot;);</span>
+        }
+<span class="nc" id="L211">        headerLine.append(ANSI_RESET);</span>
+<span class="nc" id="L212">        separatorLine.append(ANSI_RESET);</span>
+<span class="nc" id="L213">        System.out.println(headerLine);</span>
+<span class="nc" id="L214">        System.out.println(separatorLine);</span>
+        // Print data rows
+<span class="nc bnc" id="L216" title="All 2 branches missed.">        for (String[] row : rows) {</span>
+<span class="nc" id="L217">            StringBuilder rowLine = new StringBuilder(ANSI_WHITE);</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">            for (int i = 0; i &lt; headers.length; i++) {</span>
+<span class="nc bnc" id="L219" title="All 4 branches missed.">                String cell = i &lt; row.length &amp;&amp; row[i] != null ? row[i] : &quot;&quot;;</span>
+<span class="nc" id="L220">                rowLine.append(padRight(cell, colWidths[i] + 2));</span>
+            }
+<span class="nc" id="L222">            rowLine.append(ANSI_RESET);</span>
+<span class="nc" id="L223">            System.out.println(rowLine);</span>
+<span class="nc" id="L224">        }</span>
+<span class="nc" id="L225">    }</span>
+
+    public void printProgress(int current, int total, String label) {
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        if (total &lt;= 0) return;</span>
+<span class="nc" id="L229">        int barWidth = Math.min(40, terminalWidth - 20);</span>
+<span class="nc" id="L230">        int filled = (int) ((double) current / total * barWidth);</span>
+<span class="nc" id="L231">        filled = Math.max(0, Math.min(filled, barWidth));</span>
+<span class="nc" id="L232">        StringBuilder bar = new StringBuilder();</span>
+<span class="nc" id="L233">        bar.append(ANSI_CYAN).append(&quot;[&quot;);</span>
+<span class="nc" id="L234">        bar.append(ANSI_GREEN);</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        for (int i = 0; i &lt; filled; i++) bar.append(&quot;█&quot;);</span>
+<span class="nc" id="L236">        bar.append(ANSI_WHITE);</span>
+<span class="nc bnc" id="L237" title="All 2 branches missed.">        for (int i = filled; i &lt; barWidth; i++) bar.append(&quot;░&quot;);</span>
+<span class="nc" id="L238">        bar.append(ANSI_CYAN).append(&quot;] &quot;);</span>
+<span class="nc" id="L239">        int percentage = (int) ((double) current / total * 100);</span>
+<span class="nc" id="L240">        bar.append(ANSI_BOLD).append(percentage).append(&quot;%&quot;);</span>
+<span class="nc bnc" id="L241" title="All 4 branches missed.">        if (label != null &amp;&amp; !label.isEmpty()) {</span>
+<span class="nc" id="L242">            bar.append(&quot; &quot;).append(label);</span>
+        }
+<span class="nc" id="L244">        bar.append(ANSI_RESET);</span>
+<span class="nc" id="L245">        System.out.println(bar);</span>
+<span class="nc" id="L246">    }</span>
+
+    public void printBoxedMessage(String title, String content, String color) {
+<span class="nc bnc" id="L249" title="All 2 branches missed.">        if (content == null) return;</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">        String useColor = color != null ? color : ANSI_CYAN;</span>
+<span class="nc" id="L251">        String[] lines = content.split(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L252" title="All 2 branches missed.">        int maxWidth = title != null ? title.length() : 0;</span>
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        for (String line : lines) {</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            if (line.length() &gt; maxWidth) maxWidth = line.length();</span>
+        }
+<span class="nc" id="L256">        maxWidth = Math.min(maxWidth + 4, terminalWidth - 2);</span>
+<span class="nc" id="L257">        StringBuilder topBorder = new StringBuilder(useColor + &quot;┌&quot;);</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        for (int i = 0; i &lt; maxWidth; i++) topBorder.append(&quot;─&quot;);</span>
+<span class="nc" id="L259">        topBorder.append(&quot;┐&quot; + ANSI_RESET);</span>
+<span class="nc" id="L260">        System.out.println(topBorder);</span>
+<span class="nc bnc" id="L261" title="All 4 branches missed.">        if (title != null &amp;&amp; !title.isEmpty()) {</span>
+<span class="nc" id="L262">            System.out.println(useColor + &quot;│ &quot; + ANSI_BOLD + padRight(title, maxWidth - 2) + ANSI_RESET + useColor + &quot; │&quot; + ANSI_RESET);</span>
+<span class="nc" id="L263">            StringBuilder midBorder = new StringBuilder(useColor + &quot;├&quot;);</span>
+<span class="nc bnc" id="L264" title="All 2 branches missed.">            for (int i = 0; i &lt; maxWidth; i++) midBorder.append(&quot;─&quot;);</span>
+<span class="nc" id="L265">            midBorder.append(&quot;┤&quot; + ANSI_RESET);</span>
+<span class="nc" id="L266">            System.out.println(midBorder);</span>
+        }
+<span class="nc bnc" id="L268" title="All 2 branches missed.">        for (String line : lines) {</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            String truncated = line.length() &gt; maxWidth - 2 ? line.substring(0, maxWidth - 5) + &quot;...&quot; : line;</span>
+<span class="nc" id="L270">            System.out.println(useColor + &quot;│ &quot; + ANSI_WHITE + padRight(truncated, maxWidth - 2) + ANSI_RESET + useColor + &quot; │&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L272">        StringBuilder bottomBorder = new StringBuilder(useColor + &quot;└&quot;);</span>
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        for (int i = 0; i &lt; maxWidth; i++) bottomBorder.append(&quot;─&quot;);</span>
+<span class="nc" id="L274">        bottomBorder.append(&quot;┘&quot; + ANSI_RESET);</span>
+<span class="nc" id="L275">        System.out.println(bottomBorder);</span>
+<span class="nc" id="L276">    }</span>
+
+    public void printNotificationBadge(int count, String type) {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        if (count &lt;= 0) return;</span>
+        String color;
+        String label;
+<span class="nc bnc" id="L282" title="All 4 branches missed.">        if (type == null || type.equals(&quot;message&quot;)) {</span>
+<span class="nc" id="L283">            color = ANSI_BG_BLUE;</span>
+<span class="nc" id="L284">            label = &quot;MSG&quot;;</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        } else if (type.equals(&quot;mention&quot;)) {</span>
+<span class="nc" id="L286">            color = ANSI_BG_RED;</span>
+<span class="nc" id="L287">            label = &quot;@&quot;;</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">        } else if (type.equals(&quot;system&quot;)) {</span>
+<span class="nc" id="L289">            color = ANSI_BG_GREEN;</span>
+<span class="nc" id="L290">            label = &quot;SYS&quot;;</span>
+        } else {
+<span class="nc" id="L292">            color = ANSI_BG_BLUE;</span>
+<span class="nc" id="L293">            label = type.toUpperCase();</span>
+        }
+<span class="nc" id="L295">        System.out.println(color + ANSI_BOLD + &quot; &quot; + label + &quot; &quot; + count + &quot; &quot; + ANSI_RESET);</span>
+<span class="nc" id="L296">    }</span>
+
+    public String formatMessageForLog(String username, String content, String room, long timestamp) {
+<span class="nc" id="L299">        String timeStr = formatTimestamp(timestamp);</span>
+<span class="nc" id="L300">        return &quot;[&quot; + timeStr + &quot;] [&quot; + room + &quot;] &quot; + username + &quot;: &quot; + content;</span>
+    }
+
+    public String colorizeText(String text, String colorCode) {
+<span class="nc bnc" id="L304" title="All 4 branches missed.">        if (!colorEnabled || text == null) return text;</span>
+<span class="nc" id="L305">        return colorCode + text + ANSI_RESET;</span>
+    }
+
+    public String highlightText(String text, String keyword) {
+<span class="nc bnc" id="L309" title="All 6 branches missed.">        if (text == null || keyword == null || keyword.isEmpty()) return text;</span>
+<span class="nc" id="L310">        return text.replaceAll(&quot;(?i)&quot; + keyword,</span>
+                ANSI_YELLOW + ANSI_BOLD + &quot;$0&quot; + ANSI_RESET + ANSI_WHITE);
+    }
+
+    public void printRoomHeader(String roomName, String topic, int memberCount) {
+<span class="nc" id="L315">        System.out.println();</span>
+<span class="nc" id="L316">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;━━━ #&quot; + roomName + &quot; (&quot; + memberCount + &quot; members)&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L317" title="All 4 branches missed.">        if (topic != null &amp;&amp; !topic.isEmpty()) {</span>
+<span class="nc" id="L318">            System.out.println(ANSI_WHITE + &quot;    Topic: &quot; + topic + ANSI_RESET);</span>
+        }
+<span class="nc" id="L320">        System.out.println();</span>
+<span class="nc" id="L321">    }</span>
+
+    public void printMemberList(Set&lt;String&gt; members, String currentRoom, Map&lt;String, String&gt; statusMap) {
+<span class="nc bnc" id="L324" title="All 4 branches missed.">        if (members == null || members.isEmpty()) {</span>
+<span class="nc" id="L325">            System.out.println(ANSI_YELLOW + &quot;No members in this room&quot; + ANSI_RESET);</span>
+<span class="nc" id="L326">            return;</span>
+        }
+<span class="nc" id="L328">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Members in #&quot; + currentRoom + &quot; (&quot; + members.size() + &quot;):&quot; + ANSI_RESET);</span>
+<span class="nc" id="L329">        List&lt;String&gt; sortedMembers = new ArrayList&lt;&gt;(members);</span>
+<span class="nc" id="L330">        Collections.sort(sortedMembers);</span>
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        for (String member : sortedMembers) {</span>
+<span class="nc bnc" id="L332" title="All 2 branches missed.">            String status = statusMap != null ? statusMap.getOrDefault(member, &quot;offline&quot;) : &quot;online&quot;;</span>
+            String statusColor;
+            String statusIcon;
+<span class="nc bnc" id="L335" title="All 2 branches missed.">            if (&quot;online&quot;.equals(status)) {</span>
+<span class="nc" id="L336">                statusColor = ANSI_GREEN;</span>
+<span class="nc" id="L337">                statusIcon = &quot;●&quot;;</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">            } else if (&quot;away&quot;.equals(status)) {</span>
+<span class="nc" id="L339">                statusColor = ANSI_YELLOW;</span>
+<span class="nc" id="L340">                statusIcon = &quot;◑&quot;;</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">            } else if (&quot;busy&quot;.equals(status)) {</span>
+<span class="nc" id="L342">                statusColor = ANSI_RED;</span>
+<span class="nc" id="L343">                statusIcon = &quot;◌&quot;;</span>
+            } else {
+<span class="nc" id="L345">                statusColor = ANSI_WHITE;</span>
+<span class="nc" id="L346">                statusIcon = &quot;○&quot;;</span>
+            }
+<span class="nc" id="L348">            String memberColor = getCachedUserColor(member);</span>
+<span class="nc" id="L349">            System.out.println(&quot;  &quot; + statusColor + statusIcon + &quot; &quot; + memberColor + ANSI_BOLD + member + ANSI_RESET);</span>
+<span class="nc" id="L350">        }</span>
+<span class="nc" id="L351">    }</span>
+
+    public void printPaginatedHistory(List&lt;String[]&gt; messages, int page, int pageSize, String username) {
+<span class="nc bnc" id="L354" title="All 4 branches missed.">        if (messages == null || messages.isEmpty()) {</span>
+<span class="nc" id="L355">            System.out.println(ANSI_YELLOW + &quot;No messages to display&quot; + ANSI_RESET);</span>
+<span class="nc" id="L356">            return;</span>
+        }
+<span class="nc" id="L358">        int totalPages = (messages.size() + pageSize - 1) / pageSize;</span>
+<span class="nc" id="L359">        int currentPage = Math.max(0, Math.min(page, totalPages - 1));</span>
+<span class="nc" id="L360">        int start = currentPage * pageSize;</span>
+<span class="nc" id="L361">        int end = Math.min(start + pageSize, messages.size());</span>
+<span class="nc" id="L362">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== History (page &quot; + (currentPage + 1) + &quot;/&quot; + totalPages + &quot;) ===&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L363" title="All 2 branches missed.">        for (int i = start; i &lt; end; i++) {</span>
+<span class="nc" id="L364">            String[] msg = messages.get(i);</span>
+<span class="nc bnc" id="L365" title="All 4 branches missed.">            if (msg == null || msg.length &lt; 6) continue;</span>
+<span class="nc" id="L366">            String msgUser = msg[0];</span>
+<span class="nc" id="L367">            String msgContent = msg[2];</span>
+<span class="nc" id="L368">            String msgTime = msg[5];</span>
+<span class="nc bnc" id="L369" title="All 4 branches missed.">            boolean isSystemMsg = msg.length &gt; 6 &amp;&amp; Boolean.parseBoolean(msg[6]);</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            if (isSystemMsg) {</span>
+<span class="nc" id="L371">                System.out.println(ANSI_CYAN + &quot;[&quot; + msgTime + &quot;] *** &quot; + msgContent + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L372" title="All 2 branches missed.">            } else if (msgUser.equals(username)) {</span>
+<span class="nc" id="L373">                System.out.println(ANSI_GREEN + &quot;[&quot; + msgTime + &quot;] &quot; + ANSI_BOLD + msgUser +</span>
+                        ANSI_RESET + ANSI_GREEN + &quot;: &quot; + msgContent + ANSI_RESET);
+            } else {
+<span class="nc" id="L376">                String userColor = getCachedUserColor(msgUser);</span>
+<span class="nc" id="L377">                System.out.println(ANSI_WHITE + &quot;[&quot; + msgTime + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                        msgUser + ANSI_RESET + ANSI_WHITE + &quot;: &quot; + msgContent + ANSI_RESET);
+            }
+        }
+<span class="nc bnc" id="L381" title="All 2 branches missed.">        if (totalPages &gt; 1) {</span>
+<span class="nc" id="L382">            System.out.println(ANSI_BLUE + &quot;Page &quot; + (currentPage + 1) + &quot; of &quot; + totalPages +</span>
+                    &quot;. Use /history --page &lt;n&gt; to navigate.&quot; + ANSI_RESET);
+        }
+<span class="nc" id="L385">    }</span>
+
+    // Settings
+<span class="nc" id="L388">    public void setColorEnabled(boolean enabled) { this.colorEnabled = enabled; }</span>
+<span class="nc" id="L389">    public void setTimestampsEnabled(boolean enabled) { this.timestampsEnabled = enabled; }</span>
+<span class="nc" id="L390">    public void setCompactMode(boolean compact) { this.compactMode = compact; }</span>
+<span class="nc" id="L391">    public void setSeparatorsEnabled(boolean enabled) { this.separatorsEnabled = enabled; }</span>
+    public void setTerminalWidth(int width) {
+<span class="nc bnc" id="L393" title="All 4 branches missed.">        if (width &gt; 20 &amp;&amp; width &lt;= MAX_TERMINAL_WIDTH) {</span>
+<span class="nc" id="L394">            this.terminalWidth = width;</span>
+        }
+<span class="nc" id="L396">    }</span>
+<span class="nc" id="L397">    public int getTerminalWidth() { return terminalWidth; }</span>
+<span class="nc" id="L398">    public int getMessageDisplayCount() { return messageDisplayCount; }</span>
+
+    private String getCachedUserColor(String username) {
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        if (!userColorCache.containsKey(username)) {</span>
+<span class="nc" id="L402">            int hash = Math.abs(username.hashCode());</span>
+<span class="nc" id="L403">            userColorCache.put(username, USER_COLORS[hash % USER_COLORS.length]);</span>
+        }
+<span class="nc" id="L405">        return userColorCache.get(username);</span>
+    }
+
+    private String formatTimestamp(long timestamp) {
+<span class="nc bnc" id="L409" title="All 2 branches missed.">        if (!timestampsEnabled) return &quot;&quot;;</span>
+<span class="nc" id="L410">        return LocalDateTime.now().format(DateTimeFormatter.ofPattern(timeFormat));</span>
+    }
+
+    private String padRight(String s, int n) {
+<span class="nc bnc" id="L414" title="All 2 branches missed.">        if (s == null) s = &quot;&quot;;</span>
+<span class="nc bnc" id="L415" title="All 2 branches missed.">        if (s.length() &gt;= n) return s;</span>
+<span class="nc" id="L416">        StringBuilder sb = new StringBuilder(s);</span>
+<span class="nc bnc" id="L417" title="All 2 branches missed.">        for (int i = s.length(); i &lt; n; i++) sb.append(' ');</span>
+<span class="nc" id="L418">        return sb.toString();</span>
+    }
+
+    // Full dashboard rendering - shows room status, online users, and recent messages
+    public void renderFullDashboard(String currentRoom, String currentUser, List&lt;String[]&gt; recentMessages,
+                                     Set&lt;String&gt; onlineUsers, Map&lt;String, String&gt; userStatuses,
+                                     Map&lt;String, String&gt; roomInfo, int unreadCount) {
+<span class="nc" id="L425">        System.out.println();</span>
+        // Header bar
+<span class="nc" id="L427">        StringBuilder headerBar = new StringBuilder();</span>
+<span class="nc" id="L428">        headerBar.append(ANSI_BG_BLUE).append(ANSI_BOLD).append(ANSI_WHITE);</span>
+<span class="nc" id="L429">        headerBar.append(&quot; JavaChat &quot;);</span>
+<span class="nc bnc" id="L430" title="All 4 branches missed.">        if (currentRoom != null &amp;&amp; !currentRoom.isEmpty()) {</span>
+<span class="nc" id="L431">            headerBar.append(&quot;| #&quot;).append(currentRoom).append(&quot; &quot;);</span>
+        }
+<span class="nc bnc" id="L433" title="All 4 branches missed.">        if (currentUser != null &amp;&amp; !currentUser.isEmpty()) {</span>
+<span class="nc" id="L434">            headerBar.append(&quot;| &quot;).append(currentUser).append(&quot; &quot;);</span>
+        }
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if (unreadCount &gt; 0) {</span>
+<span class="nc" id="L437">            headerBar.append(&quot;| &quot;).append(ANSI_YELLOW).append(&quot;[&quot;).append(unreadCount).append(&quot; unread]&quot;).append(ANSI_WHITE);</span>
+        }
+<span class="nc" id="L439">        headerBar.append(ANSI_RESET);</span>
+<span class="nc" id="L440">        System.out.println(headerBar);</span>
+        // Room topic if available
+<span class="nc bnc" id="L442" title="All 4 branches missed.">        if (roomInfo != null &amp;&amp; !roomInfo.isEmpty()) {</span>
+<span class="nc" id="L443">            String topic = roomInfo.getOrDefault(&quot;topic&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L444" title="All 4 branches missed.">            if (topic != null &amp;&amp; !topic.isEmpty()) {</span>
+<span class="nc" id="L445">                System.out.println(ANSI_BLUE + &quot;  Topic: &quot; + ANSI_WHITE + topic + ANSI_RESET);</span>
+            }
+<span class="nc" id="L447">            String memberCount = roomInfo.getOrDefault(&quot;memberCount&quot;, &quot;0&quot;);</span>
+<span class="nc" id="L448">            System.out.println(ANSI_BLUE + &quot;  Members: &quot; + ANSI_WHITE + memberCount + ANSI_RESET);</span>
+        }
+<span class="nc" id="L450">        printSeparator();</span>
+        // Recent messages section
+<span class="nc bnc" id="L452" title="All 4 branches missed.">        if (recentMessages != null &amp;&amp; !recentMessages.isEmpty()) {</span>
+<span class="nc" id="L453">            System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Recent Messages:&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">            for (int i = 0; i &lt; recentMessages.size(); i++) {</span>
+<span class="nc" id="L455">                String[] msg = recentMessages.get(i);</span>
+<span class="nc bnc" id="L456" title="All 4 branches missed.">                if (msg == null || msg.length &lt; 3) continue;</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">                String msgUser = msg.length &gt; 0 ? msg[0] : &quot;unknown&quot;;</span>
+<span class="nc bnc" id="L458" title="All 2 branches missed.">                String msgContent = msg.length &gt; 2 ? msg[2] : &quot;&quot;;</span>
+<span class="nc bnc" id="L459" title="All 2 branches missed.">                String msgTime = msg.length &gt; 5 ? msg[5] : &quot;??:??:??&quot;;</span>
+<span class="nc bnc" id="L460" title="All 4 branches missed.">                boolean isSystem = msg.length &gt; 6 &amp;&amp; Boolean.parseBoolean(msg[6]);</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">                String msgType = msg.length &gt; 3 ? msg[3] : &quot;public&quot;;</span>
+<span class="nc bnc" id="L462" title="All 4 branches missed.">                if (isSystem || &quot;system&quot;.equals(msgType)) {</span>
+<span class="nc" id="L463">                    System.out.println(ANSI_CYAN + &quot;  [&quot; + msgTime + &quot;] *** &quot; + msgContent + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">                } else if (&quot;action&quot;.equals(msgType)) {</span>
+<span class="nc" id="L465">                    String userColor = getCachedUserColor(msgUser);</span>
+<span class="nc" id="L466">                    System.out.println(ANSI_PURPLE + &quot;  [&quot; + msgTime + &quot;] * &quot; + userColor + ANSI_BOLD + msgContent + ANSI_RESET);</span>
+<span class="nc bnc" id="L467" title="All 2 branches missed.">                } else if (&quot;private&quot;.equals(msgType)) {</span>
+<span class="nc" id="L468">                    System.out.println(ANSI_PURPLE + &quot;  [&quot; + msgTime + &quot;] [PM] &quot; + msgContent + ANSI_RESET);</span>
+                } else {
+<span class="nc" id="L470">                    String userColor = getCachedUserColor(msgUser);</span>
+<span class="nc" id="L471">                    boolean isSelf = msgUser.equals(currentUser);</span>
+<span class="nc bnc" id="L472" title="All 2 branches missed.">                    if (isSelf) {</span>
+<span class="nc" id="L473">                        System.out.println(ANSI_GREEN + &quot;  [&quot; + msgTime + &quot;] &quot; + ANSI_BOLD + msgUser +</span>
+                                ANSI_RESET + ANSI_GREEN + &quot;: &quot; + msgContent + ANSI_RESET);
+<span class="nc bnc" id="L475" title="All 2 branches missed.">                    } else if (msgContent.contains(&quot;@&quot; + currentUser)) {</span>
+<span class="nc" id="L476">                        System.out.println(ANSI_YELLOW + &quot;  [&quot; + msgTime + &quot;] &quot; + userColor + ANSI_BOLD + msgUser +</span>
+                                ANSI_RESET + ANSI_YELLOW + &quot;: &quot; + msgContent + ANSI_RESET);
+                    } else {
+<span class="nc" id="L479">                        System.out.println(ANSI_WHITE + &quot;  [&quot; + msgTime + &quot;] &quot; + userColor + ANSI_BOLD + msgUser +</span>
+                                ANSI_RESET + ANSI_WHITE + &quot;: &quot; + msgContent + ANSI_RESET);
+                    }
+                }
+            }
+        } else {
+<span class="nc" id="L485">            System.out.println(ANSI_YELLOW + &quot;  No recent messages&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L487">        printSeparator();</span>
+        // Online users sidebar (compact)
+<span class="nc bnc" id="L489" title="All 4 branches missed.">        if (onlineUsers != null &amp;&amp; !onlineUsers.isEmpty()) {</span>
+<span class="nc" id="L490">            System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Online (&quot; + onlineUsers.size() + &quot;):&quot; + ANSI_RESET);</span>
+<span class="nc" id="L491">            int shown = 0;</span>
+<span class="nc" id="L492">            int maxShow = 8;</span>
+<span class="nc" id="L493">            List&lt;String&gt; sorted = new ArrayList&lt;&gt;(onlineUsers);</span>
+<span class="nc" id="L494">            Collections.sort(sorted);</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">            for (String user : sorted) {</span>
+<span class="nc bnc" id="L496" title="All 2 branches missed.">                if (shown &gt;= maxShow) {</span>
+<span class="nc" id="L497">                    System.out.println(ANSI_WHITE + &quot;  ... and &quot; + (onlineUsers.size() - maxShow) + &quot; more&quot; + ANSI_RESET);</span>
+<span class="nc" id="L498">                    break;</span>
+                }
+<span class="nc bnc" id="L500" title="All 2 branches missed.">                String status = userStatuses != null ? userStatuses.getOrDefault(user, &quot;online&quot;) : &quot;online&quot;;</span>
+                String statusColor;
+                String icon;
+<span class="nc bnc" id="L503" title="All 2 branches missed.">                if (status.equals(&quot;online&quot;)) {</span>
+<span class="nc" id="L504">                    statusColor = ANSI_GREEN;</span>
+<span class="nc" id="L505">                    icon = &quot;●&quot;;</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">                } else if (status.equals(&quot;away&quot;)) {</span>
+<span class="nc" id="L507">                    statusColor = ANSI_YELLOW;</span>
+<span class="nc" id="L508">                    icon = &quot;◑&quot;;</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">                } else if (status.equals(&quot;busy&quot;)) {</span>
+<span class="nc" id="L510">                    statusColor = ANSI_RED;</span>
+<span class="nc" id="L511">                    icon = &quot;◌&quot;;</span>
+                } else {
+<span class="nc" id="L513">                    statusColor = ANSI_WHITE;</span>
+<span class="nc" id="L514">                    icon = &quot;○&quot;;</span>
+                }
+<span class="nc" id="L516">                String userColor = getCachedUserColor(user);</span>
+<span class="nc" id="L517">                boolean isSelf = user.equals(currentUser);</span>
+<span class="nc" id="L518">                System.out.println(&quot;  &quot; + statusColor + icon + &quot; &quot; + userColor + ANSI_BOLD + user +</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                        ANSI_RESET + (isSelf ? ANSI_CYAN + &quot; (you)&quot; + ANSI_RESET : &quot;&quot;));</span>
+<span class="nc" id="L520">                shown++;</span>
+<span class="nc" id="L521">            }</span>
+        }
+<span class="nc" id="L523">        System.out.println();</span>
+<span class="nc" id="L524">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

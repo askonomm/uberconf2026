@@ -1,0 +1,8 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+Java TUI Chat Application,com.chatapp,UserManager,2070,0,321,0,400,0,197,0,35,0
+Java TUI Chat Application,com.chatapp,CommandProcessor,2603,0,424,0,486,0,241,0,29,0
+Java TUI Chat Application,com.chatapp,ChatApplication,1310,0,230,0,279,0,136,0,21,0
+Java TUI Chat Application,com.chatapp,MessageStore,1489,0,196,0,269,0,124,0,26,0
+Java TUI Chat Application,com.chatapp,DisplayRenderer,1723,0,270,0,340,0,168,0,33,0
+Java TUI Chat Application,com.chatapp,ChatEngine,2208,0,268,0,367,0,160,0,26,0
+Java TUI Chat Application,com.chatapp,RoomManager,1948,0,236,0,349,0,141,0,23,0

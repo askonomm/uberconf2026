@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessageStore.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">MessageStore.java</span></div><h1>MessageStore.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Manages persistent message storage, indexing, and retrieval.
+ * Handles all read/write operations for chat message persistence.
+ */
+public class MessageStore {
+
+    private static final String ANSI_RESET = &quot;\u001B[0m&quot;;
+    private static final String ANSI_RED = &quot;\u001B[31m&quot;;
+    private static final String ANSI_GREEN = &quot;\u001B[32m&quot;;
+    private static final String ANSI_YELLOW = &quot;\u001B[33m&quot;;
+    private static final String ANSI_BLUE = &quot;\u001B[34m&quot;;
+    private static final String ANSI_CYAN = &quot;\u001B[36m&quot;;
+    private static final String ANSI_WHITE = &quot;\u001B[37m&quot;;
+    private static final String ANSI_BOLD = &quot;\u001B[1m&quot;;
+
+    private static final int MAX_MESSAGES_PER_ROOM = 10000;
+    private static final int MAX_PRIVATE_MESSAGES = 5000;
+    private static final int INDEX_WORD_MIN_LENGTH = 3;
+
+    // Primary storage: room -&gt; list of messages
+    private Map&lt;String, List&lt;Map&lt;String, String&gt;&gt;&gt; roomStorage;
+    // Private message storage: conversationKey -&gt; list of messages
+    private Map&lt;String, List&lt;Map&lt;String, String&gt;&gt;&gt; privateStorage;
+    // Inverted index for search: word -&gt; list of message IDs
+    private Map&lt;String, List&lt;String&gt;&gt; searchIndex;
+    // Message lookup by ID
+    private Map&lt;String, Map&lt;String, String&gt;&gt; messageById;
+    // Room metadata
+    private Map&lt;String, Map&lt;String, String&gt;&gt; roomMetadata;
+    // Statistics counters
+    private Map&lt;String, Integer&gt; wordFrequency;
+    private Map&lt;String, Integer&gt; userPostCount;
+    private Map&lt;String, Long&gt; roomLastActivity;
+    private int nextMessageId;
+    private long totalStoredBytes;
+    private int pruneCount;
+
+<span class="nc" id="L44">    public MessageStore() {</span>
+<span class="nc" id="L45">        this.roomStorage = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L46">        this.privateStorage = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L47">        this.searchIndex = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L48">        this.messageById = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L49">        this.roomMetadata = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L50">        this.wordFrequency = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L51">        this.userPostCount = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L52">        this.roomLastActivity = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L53">        this.nextMessageId = 1;</span>
+<span class="nc" id="L54">        this.totalStoredBytes = 0;</span>
+<span class="nc" id="L55">        this.pruneCount = 0;</span>
+<span class="nc" id="L56">    }</span>
+
+    public String storeMessage(String room, String username, String content, String type, long timestamp) {
+<span class="nc bnc" id="L59" title="All 4 branches missed.">        if (room == null || room.isEmpty()) {</span>
+<span class="nc" id="L60">            return null;</span>
+        }
+<span class="nc bnc" id="L62" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L63">            return null;</span>
+        }
+<span class="nc bnc" id="L65" title="All 4 branches missed.">        if (content == null || content.isEmpty()) {</span>
+<span class="nc" id="L66">            return null;</span>
+        }
+<span class="nc bnc" id="L68" title="All 2 branches missed.">        if (type == null) {</span>
+<span class="nc" id="L69">            type = &quot;public&quot;;</span>
+        }
+<span class="nc" id="L71">        String messageId = &quot;msg-&quot; + (nextMessageId++);</span>
+<span class="nc" id="L72">        Map&lt;String, String&gt; message = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L73">        message.put(&quot;id&quot;, messageId);</span>
+<span class="nc" id="L74">        message.put(&quot;room&quot;, room);</span>
+<span class="nc" id="L75">        message.put(&quot;username&quot;, username);</span>
+<span class="nc" id="L76">        message.put(&quot;content&quot;, content);</span>
+<span class="nc" id="L77">        message.put(&quot;type&quot;, type);</span>
+<span class="nc" id="L78">        message.put(&quot;timestamp&quot;, String.valueOf(timestamp));</span>
+<span class="nc" id="L79">        message.put(&quot;timeStr&quot;, LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;)));</span>
+<span class="nc" id="L80">        message.put(&quot;dateStr&quot;, LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;)));</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if (!roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L82">            roomStorage.put(room, new ArrayList&lt;&gt;());</span>
+        }
+<span class="nc" id="L84">        roomStorage.get(room).add(message);</span>
+<span class="nc" id="L85">        messageById.put(messageId, message);</span>
+<span class="nc" id="L86">        totalStoredBytes += content.length() + username.length() + 50;</span>
+        // Update room metadata
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        if (!roomMetadata.containsKey(room)) {</span>
+<span class="nc" id="L89">            Map&lt;String, String&gt; meta = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L90">            meta.put(&quot;created&quot;, message.get(&quot;dateStr&quot;));</span>
+<span class="nc" id="L91">            meta.put(&quot;messageCount&quot;, &quot;0&quot;);</span>
+<span class="nc" id="L92">            roomMetadata.put(room, meta);</span>
+        }
+<span class="nc" id="L94">        Map&lt;String, String&gt; meta = roomMetadata.get(room);</span>
+<span class="nc" id="L95">        int roomMsgCount = Integer.parseInt(meta.getOrDefault(&quot;messageCount&quot;, &quot;0&quot;));</span>
+<span class="nc" id="L96">        meta.put(&quot;messageCount&quot;, String.valueOf(roomMsgCount + 1));</span>
+<span class="nc" id="L97">        meta.put(&quot;lastMessage&quot;, content.substring(0, Math.min(100, content.length())));</span>
+<span class="nc" id="L98">        meta.put(&quot;lastUser&quot;, username);</span>
+<span class="nc" id="L99">        meta.put(&quot;lastTime&quot;, message.get(&quot;timeStr&quot;));</span>
+<span class="nc" id="L100">        roomLastActivity.put(room, timestamp);</span>
+        // Update user post count
+<span class="nc" id="L102">        int userCount = userPostCount.getOrDefault(username, 0);</span>
+<span class="nc" id="L103">        userPostCount.put(username, userCount + 1);</span>
+        // Index words for search
+<span class="nc" id="L105">        indexMessage(messageId, content);</span>
+        // Prune if needed
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if (roomStorage.get(room).size() &gt; MAX_MESSAGES_PER_ROOM) {</span>
+<span class="nc" id="L108">            pruneRoom(room);</span>
+        }
+<span class="nc" id="L110">        return messageId;</span>
+    }
+
+    public String storePrivateMessage(String fromUser, String toUser, String content, long timestamp) {
+<span class="nc bnc" id="L114" title="All 6 branches missed.">        if (fromUser == null || toUser == null || content == null) {</span>
+<span class="nc" id="L115">            return null;</span>
+        }
+<span class="nc bnc" id="L117" title="All 6 branches missed.">        if (fromUser.isEmpty() || toUser.isEmpty() || content.isEmpty()) {</span>
+<span class="nc" id="L118">            return null;</span>
+        }
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        String key = fromUser.compareTo(toUser) &lt; 0 ? fromUser + &quot;:&quot; + toUser : toUser + &quot;:&quot; + fromUser;</span>
+<span class="nc" id="L121">        String messageId = &quot;pm-&quot; + (nextMessageId++);</span>
+<span class="nc" id="L122">        Map&lt;String, String&gt; message = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L123">        message.put(&quot;id&quot;, messageId);</span>
+<span class="nc" id="L124">        message.put(&quot;from&quot;, fromUser);</span>
+<span class="nc" id="L125">        message.put(&quot;to&quot;, toUser);</span>
+<span class="nc" id="L126">        message.put(&quot;content&quot;, content);</span>
+<span class="nc" id="L127">        message.put(&quot;type&quot;, &quot;private&quot;);</span>
+<span class="nc" id="L128">        message.put(&quot;timestamp&quot;, String.valueOf(timestamp));</span>
+<span class="nc" id="L129">        message.put(&quot;timeStr&quot;, LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;)));</span>
+<span class="nc" id="L130">        message.put(&quot;dateStr&quot;, LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;)));</span>
+<span class="nc" id="L131">        message.put(&quot;read&quot;, &quot;false&quot;);</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if (!privateStorage.containsKey(key)) {</span>
+<span class="nc" id="L133">            privateStorage.put(key, new ArrayList&lt;&gt;());</span>
+        }
+<span class="nc" id="L135">        privateStorage.get(key).add(message);</span>
+<span class="nc" id="L136">        messageById.put(messageId, message);</span>
+<span class="nc" id="L137">        totalStoredBytes += content.length() + fromUser.length() + toUser.length() + 50;</span>
+<span class="nc" id="L138">        indexMessage(messageId, content);</span>
+<span class="nc bnc" id="L139" title="All 2 branches missed.">        if (privateStorage.get(key).size() &gt; MAX_PRIVATE_MESSAGES) {</span>
+<span class="nc" id="L140">            List&lt;String[]&gt; pruned = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L141">            List&lt;Map&lt;String, String&gt;&gt; msgs = privateStorage.get(key);</span>
+<span class="nc" id="L142">            int removeCount = msgs.size() - MAX_PRIVATE_MESSAGES;</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            for (int i = 0; i &lt; removeCount; i++) {</span>
+<span class="nc" id="L144">                Map&lt;String, String&gt; removed = msgs.remove(0);</span>
+<span class="nc" id="L145">                String removedId = removed.get(&quot;id&quot;);</span>
+<span class="nc" id="L146">                messageById.remove(removedId);</span>
+<span class="nc" id="L147">                pruneCount++;</span>
+            }
+        }
+<span class="nc" id="L150">        return messageId;</span>
+    }
+
+    private void indexMessage(String messageId, String content) {
+<span class="nc" id="L154">        String[] words = content.toLowerCase().split(&quot;[^a-zA-Z0-9]+&quot;);</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        for (String word : words) {</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">            if (word.length() &lt; INDEX_WORD_MIN_LENGTH) {</span>
+<span class="nc" id="L157">                continue;</span>
+            }
+<span class="nc bnc" id="L159" title="All 2 branches missed.">            if (!searchIndex.containsKey(word)) {</span>
+<span class="nc" id="L160">                searchIndex.put(word, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L162">            searchIndex.get(word).add(messageId);</span>
+            // Trim large index entries
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if (searchIndex.get(word).size() &gt; 1000) {</span>
+<span class="nc" id="L165">                List&lt;String&gt; idx = searchIndex.get(word);</span>
+<span class="nc" id="L166">                idx.remove(0);</span>
+            }
+            // Track word frequency
+<span class="nc" id="L169">            int freq = wordFrequency.getOrDefault(word, 0);</span>
+<span class="nc" id="L170">            wordFrequency.put(word, freq + 1);</span>
+        }
+<span class="nc" id="L172">    }</span>
+
+    private void pruneRoom(String room) {
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if (!roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L176">            return;</span>
+        }
+<span class="nc" id="L178">        List&lt;Map&lt;String, String&gt;&gt; messages = roomStorage.get(room);</span>
+<span class="nc" id="L179">        int targetSize = MAX_MESSAGES_PER_ROOM / 2;</span>
+<span class="nc" id="L180">        int removeCount = messages.size() - targetSize;</span>
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        for (int i = 0; i &lt; removeCount; i++) {</span>
+<span class="nc" id="L182">            Map&lt;String, String&gt; removed = messages.remove(0);</span>
+<span class="nc" id="L183">            String removedId = removed.get(&quot;id&quot;);</span>
+<span class="nc bnc" id="L184" title="All 2 branches missed.">            if (removedId != null) {</span>
+<span class="nc" id="L185">                messageById.remove(removedId);</span>
+            }
+<span class="nc" id="L187">            pruneCount++;</span>
+        }
+<span class="nc" id="L189">    }</span>
+
+    public List&lt;Map&lt;String, String&gt;&gt; getRecentMessages(String room, int limit) {
+<span class="nc bnc" id="L192" title="All 4 branches missed.">        if (room == null || !roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L193">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L195">        List&lt;Map&lt;String, String&gt;&gt; messages = roomStorage.get(room);</span>
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if (messages.isEmpty()) {</span>
+<span class="nc" id="L197">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L199">        int start = Math.max(0, messages.size() - limit);</span>
+<span class="nc" id="L200">        return new ArrayList&lt;&gt;(messages.subList(start, messages.size()));</span>
+    }
+
+    public List&lt;Map&lt;String, String&gt;&gt; searchByKeyword(String keyword, String room, int maxResults) {
+<span class="nc" id="L204">        List&lt;Map&lt;String, String&gt;&gt; results = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L205" title="All 4 branches missed.">        if (keyword == null || keyword.isEmpty()) {</span>
+<span class="nc" id="L206">            return results;</span>
+        }
+<span class="nc" id="L208">        String lowerKeyword = keyword.toLowerCase();</span>
+        // Try index first for speed
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (searchIndex.containsKey(lowerKeyword)) {</span>
+<span class="nc" id="L211">            List&lt;String&gt; ids = searchIndex.get(lowerKeyword);</span>
+<span class="nc bnc" id="L212" title="All 2 branches missed.">            for (String id : ids) {</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">                if (results.size() &gt;= maxResults) {</span>
+<span class="nc" id="L214">                    break;</span>
+                }
+<span class="nc" id="L216">                Map&lt;String, String&gt; msg = messageById.get(id);</span>
+<span class="nc bnc" id="L217" title="All 2 branches missed.">                if (msg != null) {</span>
+<span class="nc bnc" id="L218" title="All 8 branches missed.">                    if (room == null || room.isEmpty() || room.equals(&quot;*&quot;) || room.equals(msg.get(&quot;room&quot;))) {</span>
+<span class="nc" id="L219">                        results.add(msg);</span>
+                    }
+                }
+<span class="nc" id="L222">            }</span>
+        }
+        // Fall back to linear scan if not enough results
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        if (results.size() &lt; maxResults) {</span>
+            Collection&lt;List&lt;Map&lt;String, String&gt;&gt;&gt; storageSets;
+<span class="nc bnc" id="L227" title="All 8 branches missed.">            if (room != null &amp;&amp; !room.isEmpty() &amp;&amp; !room.equals(&quot;*&quot;) &amp;&amp; roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L228">                storageSets = Collections.singleton(roomStorage.get(room));</span>
+            } else {
+<span class="nc" id="L230">                storageSets = roomStorage.values();</span>
+            }
+<span class="nc bnc" id="L232" title="All 2 branches missed.">            for (List&lt;Map&lt;String, String&gt;&gt; roomMsgs : storageSets) {</span>
+<span class="nc bnc" id="L233" title="All 2 branches missed.">                for (Map&lt;String, String&gt; msg : roomMsgs) {</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">                    if (results.size() &gt;= maxResults) {</span>
+<span class="nc" id="L235">                        break;</span>
+                    }
+<span class="nc" id="L237">                    String content = msg.get(&quot;content&quot;);</span>
+<span class="nc bnc" id="L238" title="All 4 branches missed.">                    if (content != null &amp;&amp; content.toLowerCase().contains(lowerKeyword)) {</span>
+<span class="nc bnc" id="L239" title="All 2 branches missed.">                        if (!results.contains(msg)) {</span>
+<span class="nc" id="L240">                            results.add(msg);</span>
+                        }
+                    }
+<span class="nc" id="L243">                }</span>
+<span class="nc" id="L244">            }</span>
+        }
+<span class="nc" id="L246">        return results;</span>
+    }
+
+    public List&lt;Map&lt;String, String&gt;&gt; searchByUser(String username, String room, int maxResults) {
+<span class="nc" id="L250">        List&lt;Map&lt;String, String&gt;&gt; results = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L251" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L252">            return results;</span>
+        }
+        Collection&lt;List&lt;Map&lt;String, String&gt;&gt;&gt; storageSets;
+<span class="nc bnc" id="L255" title="All 8 branches missed.">        if (room != null &amp;&amp; !room.isEmpty() &amp;&amp; !room.equals(&quot;*&quot;) &amp;&amp; roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L256">            storageSets = Collections.singleton(roomStorage.get(room));</span>
+        } else {
+<span class="nc" id="L258">            storageSets = roomStorage.values();</span>
+        }
+<span class="nc bnc" id="L260" title="All 2 branches missed.">        for (List&lt;Map&lt;String, String&gt;&gt; roomMsgs : storageSets) {</span>
+<span class="nc bnc" id="L261" title="All 2 branches missed.">            for (Map&lt;String, String&gt; msg : roomMsgs) {</span>
+<span class="nc bnc" id="L262" title="All 2 branches missed.">                if (results.size() &gt;= maxResults) {</span>
+<span class="nc" id="L263">                    break;</span>
+                }
+<span class="nc" id="L265">                String msgUser = msg.get(&quot;username&quot;);</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">                if (username.equalsIgnoreCase(msgUser)) {</span>
+<span class="nc" id="L267">                    results.add(msg);</span>
+                }
+<span class="nc" id="L269">            }</span>
+<span class="nc" id="L270">        }</span>
+<span class="nc" id="L271">        return results;</span>
+    }
+
+    public List&lt;Map&lt;String, String&gt;&gt; searchByDateRange(String room, long fromTimestamp, long toTimestamp, int maxResults) {
+<span class="nc" id="L275">        List&lt;Map&lt;String, String&gt;&gt; results = new ArrayList&lt;&gt;();</span>
+        Collection&lt;List&lt;Map&lt;String, String&gt;&gt;&gt; storageSets;
+<span class="nc bnc" id="L277" title="All 8 branches missed.">        if (room != null &amp;&amp; !room.isEmpty() &amp;&amp; !room.equals(&quot;*&quot;) &amp;&amp; roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L278">            storageSets = Collections.singleton(roomStorage.get(room));</span>
+        } else {
+<span class="nc" id="L280">            storageSets = roomStorage.values();</span>
+        }
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        for (List&lt;Map&lt;String, String&gt;&gt; roomMsgs : storageSets) {</span>
+<span class="nc bnc" id="L283" title="All 2 branches missed.">            for (Map&lt;String, String&gt; msg : roomMsgs) {</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">                if (results.size() &gt;= maxResults) {</span>
+<span class="nc" id="L285">                    break;</span>
+                }
+<span class="nc" id="L287">                String tsStr = msg.get(&quot;timestamp&quot;);</span>
+<span class="nc bnc" id="L288" title="All 2 branches missed.">                if (tsStr != null) {</span>
+                    try {
+<span class="nc" id="L290">                        long ts = Long.parseLong(tsStr);</span>
+<span class="nc bnc" id="L291" title="All 4 branches missed.">                        boolean afterFrom = fromTimestamp &lt;= 0 || ts &gt;= fromTimestamp;</span>
+<span class="nc bnc" id="L292" title="All 4 branches missed.">                        boolean beforeTo = toTimestamp &lt;= 0 || ts &lt;= toTimestamp;</span>
+<span class="nc bnc" id="L293" title="All 4 branches missed.">                        if (afterFrom &amp;&amp; beforeTo) {</span>
+<span class="nc" id="L294">                            results.add(msg);</span>
+                        }
+<span class="nc" id="L296">                    } catch (NumberFormatException e) {</span>
+                        // skip malformed
+<span class="nc" id="L298">                    }</span>
+                }
+<span class="nc" id="L300">            }</span>
+<span class="nc" id="L301">        }</span>
+<span class="nc" id="L302">        return results;</span>
+    }
+
+    public Map&lt;String, String&gt; getMessageById(String messageId) {
+<span class="nc" id="L306">        return messageById.get(messageId);</span>
+    }
+
+    public boolean deleteMessage(String messageId, String requestingUser) {
+<span class="nc" id="L310">        Map&lt;String, String&gt; msg = messageById.get(messageId);</span>
+<span class="nc bnc" id="L311" title="All 2 branches missed.">        if (msg == null) {</span>
+<span class="nc" id="L312">            return false;</span>
+        }
+<span class="nc" id="L314">        String msgUser = msg.get(&quot;username&quot;);</span>
+<span class="nc bnc" id="L315" title="All 4 branches missed.">        if (msgUser == null || !msgUser.equals(requestingUser)) {</span>
+<span class="nc" id="L316">            return false;</span>
+        }
+<span class="nc" id="L318">        String room = msg.get(&quot;room&quot;);</span>
+<span class="nc bnc" id="L319" title="All 4 branches missed.">        if (room != null &amp;&amp; roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L320">            roomStorage.get(room).remove(msg);</span>
+        }
+<span class="nc" id="L322">        messageById.remove(messageId);</span>
+<span class="nc" id="L323">        return true;</span>
+    }
+
+    public List&lt;Map&lt;String, String&gt;&gt; getPrivateMessages(String user1, String user2, int limit) {
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        String key = user1.compareTo(user2) &lt; 0 ? user1 + &quot;:&quot; + user2 : user2 + &quot;:&quot; + user1;</span>
+<span class="nc" id="L328">        List&lt;Map&lt;String, String&gt;&gt; messages = privateStorage.getOrDefault(key, new ArrayList&lt;&gt;());</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if (messages.isEmpty()) {</span>
+<span class="nc" id="L330">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L332">        int start = Math.max(0, messages.size() - limit);</span>
+<span class="nc" id="L333">        return new ArrayList&lt;&gt;(messages.subList(start, messages.size()));</span>
+    }
+
+    public void markPrivateMessagesRead(String fromUser, String toUser) {
+<span class="nc bnc" id="L337" title="All 2 branches missed.">        String key = fromUser.compareTo(toUser) &lt; 0 ? fromUser + &quot;:&quot; + toUser : toUser + &quot;:&quot; + fromUser;</span>
+<span class="nc" id="L338">        List&lt;Map&lt;String, String&gt;&gt; messages = privateStorage.getOrDefault(key, new ArrayList&lt;&gt;());</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        for (Map&lt;String, String&gt; msg : messages) {</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">            if (toUser.equals(msg.get(&quot;to&quot;))) {</span>
+<span class="nc" id="L341">                msg.put(&quot;read&quot;, &quot;true&quot;);</span>
+            }
+<span class="nc" id="L343">        }</span>
+<span class="nc" id="L344">    }</span>
+
+    public int getUnreadCount(String username) {
+<span class="nc" id="L347">        int count = 0;</span>
+<span class="nc bnc" id="L348" title="All 2 branches missed.">        for (List&lt;Map&lt;String, String&gt;&gt; conversation : privateStorage.values()) {</span>
+<span class="nc bnc" id="L349" title="All 2 branches missed.">            for (Map&lt;String, String&gt; msg : conversation) {</span>
+<span class="nc bnc" id="L350" title="All 4 branches missed.">                if (username.equals(msg.get(&quot;to&quot;)) &amp;&amp; &quot;false&quot;.equals(msg.get(&quot;read&quot;))) {</span>
+<span class="nc" id="L351">                    count++;</span>
+                }
+<span class="nc" id="L353">            }</span>
+<span class="nc" id="L354">        }</span>
+<span class="nc" id="L355">        return count;</span>
+    }
+
+    public Map&lt;String, Integer&gt; getRoomMessageCounts() {
+<span class="nc" id="L359">        Map&lt;String, Integer&gt; counts = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        for (Map.Entry&lt;String, List&lt;Map&lt;String, String&gt;&gt;&gt; entry : roomStorage.entrySet()) {</span>
+<span class="nc" id="L361">            counts.put(entry.getKey(), entry.getValue().size());</span>
+<span class="nc" id="L362">        }</span>
+<span class="nc" id="L363">        return counts;</span>
+    }
+
+    public List&lt;String&gt; getMostActiveRooms(int limit) {
+<span class="nc" id="L367">        Map&lt;String, Integer&gt; counts = getRoomMessageCounts();</span>
+<span class="nc" id="L368">        List&lt;Map.Entry&lt;String, Integer&gt;&gt; sorted = new ArrayList&lt;&gt;(counts.entrySet());</span>
+<span class="nc" id="L369">        sorted.sort((a, b) -&gt; b.getValue().compareTo(a.getValue()));</span>
+<span class="nc" id="L370">        List&lt;String&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        for (int i = 0; i &lt; Math.min(limit, sorted.size()); i++) {</span>
+<span class="nc" id="L372">            result.add(sorted.get(i).getKey());</span>
+        }
+<span class="nc" id="L374">        return result;</span>
+    }
+
+    public List&lt;String&gt; getTopWords(int limit) {
+<span class="nc" id="L378">        List&lt;Map.Entry&lt;String, Integer&gt;&gt; sorted = new ArrayList&lt;&gt;(wordFrequency.entrySet());</span>
+<span class="nc" id="L379">        sorted.sort((a, b) -&gt; b.getValue().compareTo(a.getValue()));</span>
+<span class="nc" id="L380">        List&lt;String&gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L381" title="All 2 branches missed.">        for (int i = 0; i &lt; Math.min(limit, sorted.size()); i++) {</span>
+<span class="nc" id="L382">            result.add(sorted.get(i).getKey() + &quot;(&quot; + sorted.get(i).getValue() + &quot;)&quot;);</span>
+        }
+<span class="nc" id="L384">        return result;</span>
+    }
+
+    public void printStorageStats() {
+<span class="nc" id="L388">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Message Store Statistics ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L389">        System.out.println(ANSI_WHITE + &quot;Total rooms with messages: &quot; + roomStorage.size() + ANSI_RESET);</span>
+<span class="nc" id="L390">        System.out.println(ANSI_WHITE + &quot;Total private conversations: &quot; + privateStorage.size() + ANSI_RESET);</span>
+<span class="nc" id="L391">        System.out.println(ANSI_WHITE + &quot;Total indexed messages: &quot; + messageById.size() + ANSI_RESET);</span>
+<span class="nc" id="L392">        System.out.println(ANSI_WHITE + &quot;Total search index entries: &quot; + searchIndex.size() + ANSI_RESET);</span>
+<span class="nc" id="L393">        System.out.println(ANSI_WHITE + &quot;Approximate storage bytes: &quot; + totalStoredBytes + ANSI_RESET);</span>
+<span class="nc" id="L394">        System.out.println(ANSI_WHITE + &quot;Messages pruned: &quot; + pruneCount + ANSI_RESET);</span>
+<span class="nc" id="L395">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Top 5 most active rooms:&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        for (String room : getMostActiveRooms(5)) {</span>
+<span class="nc" id="L397">            List&lt;Map&lt;String, String&gt;&gt; msgs = roomStorage.get(room);</span>
+<span class="nc bnc" id="L398" title="All 2 branches missed.">            System.out.println(&quot;  #&quot; + room + &quot;: &quot; + (msgs != null ? msgs.size() : 0) + &quot; messages&quot;);</span>
+<span class="nc" id="L399">        }</span>
+<span class="nc" id="L400">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Top 10 words:&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">        for (String word : getTopWords(10)) {</span>
+<span class="nc" id="L402">            System.out.println(&quot;  &quot; + word);</span>
+<span class="nc" id="L403">        }</span>
+<span class="nc" id="L404">    }</span>
+
+    public int getTotalMessageCount() {
+<span class="nc" id="L407">        int total = 0;</span>
+<span class="nc bnc" id="L408" title="All 2 branches missed.">        for (List&lt;Map&lt;String, String&gt;&gt; msgs : roomStorage.values()) {</span>
+<span class="nc" id="L409">            total += msgs.size();</span>
+<span class="nc" id="L410">        }</span>
+<span class="nc" id="L411">        return total;</span>
+    }
+
+    public Map&lt;String, Integer&gt; getUserPostCounts() {
+<span class="nc" id="L415">        return new HashMap&lt;&gt;(userPostCount);</span>
+    }
+
+    public void clearRoom(String room) {
+<span class="nc bnc" id="L419" title="All 2 branches missed.">        if (roomStorage.containsKey(room)) {</span>
+<span class="nc" id="L420">            List&lt;Map&lt;String, String&gt;&gt; msgs = roomStorage.get(room);</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">            for (Map&lt;String, String&gt; msg : msgs) {</span>
+<span class="nc" id="L422">                messageById.remove(msg.get(&quot;id&quot;));</span>
+<span class="nc" id="L423">            }</span>
+<span class="nc" id="L424">            roomStorage.remove(room);</span>
+        }
+<span class="nc" id="L426">        roomMetadata.remove(room);</span>
+<span class="nc" id="L427">        roomLastActivity.remove(room);</span>
+<span class="nc" id="L428">    }</span>
+
+    public Map&lt;String, String&gt; getRoomMetadata(String room) {
+<span class="nc" id="L431">        return roomMetadata.getOrDefault(room, new HashMap&lt;&gt;());</span>
+    }
+
+    public long getRoomLastActivity(String room) {
+<span class="nc" id="L435">        return roomLastActivity.getOrDefault(room, 0L);</span>
+    }
+
+    public List&lt;String&gt; getAllRooms() {
+<span class="nc" id="L439">        return new ArrayList&lt;&gt;(roomStorage.keySet());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

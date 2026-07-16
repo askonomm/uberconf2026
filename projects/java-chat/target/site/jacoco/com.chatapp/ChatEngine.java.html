@@ -1,0 +1,551 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatEngine.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">ChatEngine.java</span></div><h1>ChatEngine.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Core chat engine - handles message routing, delivery, and chat state.
+ * This class is the heart of the application and coordinates between all subsystems.
+ */
+public class ChatEngine {
+
+    private static final String ANSI_RESET = &quot;\u001B[0m&quot;;
+    private static final String ANSI_RED = &quot;\u001B[31m&quot;;
+    private static final String ANSI_GREEN = &quot;\u001B[32m&quot;;
+    private static final String ANSI_YELLOW = &quot;\u001B[33m&quot;;
+    private static final String ANSI_BLUE = &quot;\u001B[34m&quot;;
+    private static final String ANSI_PURPLE = &quot;\u001B[35m&quot;;
+    private static final String ANSI_CYAN = &quot;\u001B[36m&quot;;
+    private static final String ANSI_WHITE = &quot;\u001B[37m&quot;;
+    private static final String ANSI_BOLD = &quot;\u001B[1m&quot;;
+
+    private Map&lt;String, List&lt;String[]&gt;&gt; roomMessages;
+    private Map&lt;String, List&lt;String[]&gt;&gt; privateMessages;
+    private Map&lt;String, String&gt; userColors;
+    private Map&lt;String, Integer&gt; userMessageCounts;
+    private Map&lt;String, Long&gt; lastMessageTime;
+    private Map&lt;String, Boolean&gt; userMuteStatus;
+    private Map&lt;String, List&lt;String&gt;&gt; userMentions;
+    private List&lt;String[]&gt; globalEventLog;
+    private int totalMessageCount;
+    private boolean profanityFilterEnabled;
+    private boolean rateLimitEnabled;
+    private long rateLimitWindowMs;
+    private int rateLimitMaxMessages;
+<span class="nc" id="L36">    private static final String[] BAD_WORDS = {&quot;spam&quot;, &quot;flood&quot;, &quot;abuse&quot;};</span>
+<span class="nc" id="L37">    private static final String[] USER_COLORS = {</span>
+        ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_PURPLE, ANSI_CYAN, ANSI_WHITE
+    };
+
+<span class="nc" id="L41">    public ChatEngine() {</span>
+<span class="nc" id="L42">        this.roomMessages = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L43">        this.privateMessages = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L44">        this.userColors = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L45">        this.userMessageCounts = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L46">        this.lastMessageTime = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L47">        this.userMuteStatus = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L48">        this.userMentions = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L49">        this.globalEventLog = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L50">        this.totalMessageCount = 0;</span>
+<span class="nc" id="L51">        this.profanityFilterEnabled = true;</span>
+<span class="nc" id="L52">        this.rateLimitEnabled = true;</span>
+<span class="nc" id="L53">        this.rateLimitWindowMs = 1000;</span>
+<span class="nc" id="L54">        this.rateLimitMaxMessages = 5;</span>
+<span class="nc" id="L55">    }</span>
+
+    // Main message sending method - handles routing and display
+    public void sendMessage(String username, String room, String content, String messageType,
+                             long timestamp, boolean isSystem, String targetUser, int sessionCount) {
+<span class="nc bnc" id="L60" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L61">            System.out.println(ANSI_RED + &quot;Error: Username cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L62">            return;</span>
+        }
+<span class="nc bnc" id="L64" title="All 4 branches missed.">        if (room == null || room.isEmpty()) {</span>
+<span class="nc" id="L65">            System.out.println(ANSI_RED + &quot;Error: Room cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L66">            return;</span>
+        }
+<span class="nc bnc" id="L68" title="All 4 branches missed.">        if (content == null || content.isEmpty()) {</span>
+<span class="nc" id="L69">            System.out.println(ANSI_RED + &quot;Error: Message content cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L70">            return;</span>
+        }
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if (content.length() &gt; 500) {</span>
+<span class="nc" id="L73">            System.out.println(ANSI_RED + &quot;Error: Message too long (max 500 chars)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L74">            return;</span>
+        }
+<span class="nc bnc" id="L76" title="All 4 branches missed.">        if (userMuteStatus.containsKey(username) &amp;&amp; userMuteStatus.get(username)) {</span>
+<span class="nc" id="L77">            System.out.println(ANSI_RED + &quot;You are currently muted and cannot send messages&quot; + ANSI_RESET);</span>
+<span class="nc" id="L78">            return;</span>
+        }
+<span class="nc bnc" id="L80" title="All 4 branches missed.">        if (rateLimitEnabled &amp;&amp; !isSystem) {</span>
+<span class="nc" id="L81">            long now = System.currentTimeMillis();</span>
+<span class="nc bnc" id="L82" title="All 2 branches missed.">            if (lastMessageTime.containsKey(username)) {</span>
+<span class="nc" id="L83">                long timeDiff = now - lastMessageTime.get(username);</span>
+<span class="nc bnc" id="L84" title="All 2 branches missed.">                if (timeDiff &lt; rateLimitWindowMs) {</span>
+<span class="nc" id="L85">                    int count = userMessageCounts.getOrDefault(username + &quot;_ratelimit&quot;, 0);</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">                    if (count &gt;= rateLimitMaxMessages) {</span>
+<span class="nc" id="L87">                        System.out.println(ANSI_YELLOW + &quot;Rate limit: please slow down!&quot; + ANSI_RESET);</span>
+<span class="nc" id="L88">                        return;</span>
+                    }
+<span class="nc" id="L90">                    userMessageCounts.put(username + &quot;_ratelimit&quot;, count + 1);</span>
+<span class="nc" id="L91">                } else {</span>
+<span class="nc" id="L92">                    userMessageCounts.put(username + &quot;_ratelimit&quot;, 1);</span>
+<span class="nc" id="L93">                    lastMessageTime.put(username, now);</span>
+                }
+<span class="nc" id="L95">            } else {</span>
+<span class="nc" id="L96">                lastMessageTime.put(username, now);</span>
+<span class="nc" id="L97">                userMessageCounts.put(username + &quot;_ratelimit&quot;, 1);</span>
+            }
+        }
+<span class="nc" id="L100">        String processedContent = content;</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if (profanityFilterEnabled) {</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            for (String badWord : BAD_WORDS) {</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if (processedContent.toLowerCase().contains(badWord)) {</span>
+<span class="nc" id="L104">                    processedContent = processedContent.replaceAll(&quot;(?i)&quot; + badWord,</span>
+<span class="nc" id="L105">                            &quot;*&quot;.repeat(badWord.length()));</span>
+                }
+            }
+        }
+        // Check for mentions
+<span class="nc" id="L110">        List&lt;String&gt; mentions = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if (processedContent.contains(&quot;@&quot;)) {</span>
+<span class="nc" id="L112">            String[] words = processedContent.split(&quot;\\s+&quot;);</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">            for (String word : words) {</span>
+<span class="nc bnc" id="L114" title="All 4 branches missed.">                if (word.startsWith(&quot;@&quot;) &amp;&amp; word.length() &gt; 1) {</span>
+<span class="nc" id="L115">                    String mentionedUser = word.substring(1).replaceAll(&quot;[^a-zA-Z0-9_]&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                    if (!mentionedUser.isEmpty()) {</span>
+<span class="nc" id="L117">                        mentions.add(mentionedUser);</span>
+<span class="nc bnc" id="L118" title="All 2 branches missed.">                        if (!userMentions.containsKey(mentionedUser)) {</span>
+<span class="nc" id="L119">                            userMentions.put(mentionedUser, new ArrayList&lt;&gt;());</span>
+                        }
+<span class="nc" id="L121">                        userMentions.get(mentionedUser).add(username + &quot; mentioned you in &quot; + room + &quot;: &quot; + processedContent);</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L126">        String userColor = getUserColor(username);</span>
+<span class="nc" id="L127">        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;);</span>
+<span class="nc" id="L128">        String timeStr = LocalDateTime.now().format(formatter);</span>
+<span class="nc" id="L129">        String[] messageRecord = {username, room, processedContent, messageType,</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">            String.valueOf(timestamp), timeStr, isSystem ? &quot;true&quot; : &quot;false&quot;,</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            targetUser != null ? targetUser : &quot;&quot;};</span>
+<span class="nc bnc" id="L132" title="All 4 branches missed.">        if (messageType.equals(&quot;private&quot;) &amp;&amp; targetUser != null) {</span>
+<span class="nc" id="L133">            String key = getPrivateKey(username, targetUser);</span>
+<span class="nc bnc" id="L134" title="All 2 branches missed.">            if (!privateMessages.containsKey(key)) {</span>
+<span class="nc" id="L135">                privateMessages.put(key, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L137">            privateMessages.get(key).add(messageRecord);</span>
+<span class="nc" id="L138">            System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] &quot; + ANSI_BOLD +</span>
+                    &quot;[PM to &quot; + targetUser + &quot;] &quot; + userColor + username + ANSI_RESET +
+                    ANSI_PURPLE + &quot;: &quot; + processedContent + ANSI_RESET);
+<span class="nc bnc" id="L141" title="All 2 branches missed.">        } else if (isSystem) {</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L143">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L145">            roomMessages.get(room).add(messageRecord);</span>
+<span class="nc" id="L146">            System.out.println(ANSI_CYAN + &quot;[&quot; + timeStr + &quot;] &quot; + ANSI_BOLD + &quot;*** &quot; +</span>
+                    processedContent + &quot; ***&quot; + ANSI_RESET);
+        } else {
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L150">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L152">            roomMessages.get(room).add(messageRecord);</span>
+            // Check if message has mentions
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            boolean hasMention = !mentions.isEmpty();</span>
+<span class="nc bnc" id="L155" title="All 2 branches missed.">            if (hasMention) {</span>
+<span class="nc" id="L156">                System.out.println(ANSI_YELLOW + &quot;[&quot; + timeStr + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                        username + ANSI_RESET + ANSI_YELLOW + &quot;: &quot; + processedContent + ANSI_RESET);
+            } else {
+<span class="nc" id="L159">                System.out.println(ANSI_WHITE + &quot;[&quot; + timeStr + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                        username + ANSI_RESET + ANSI_WHITE + &quot;: &quot; + processedContent + ANSI_RESET);
+            }
+        }
+        // Update counts
+<span class="nc" id="L164">        int currentCount = userMessageCounts.getOrDefault(username, 0);</span>
+<span class="nc" id="L165">        userMessageCounts.put(username, currentCount + 1);</span>
+<span class="nc" id="L166">        totalMessageCount++;</span>
+        // Log the event
+<span class="nc" id="L168">        String[] eventRecord = {&quot;MSG&quot;, username, room, timeStr, processedContent.substring(0, Math.min(50, processedContent.length()))};</span>
+<span class="nc" id="L169">        globalEventLog.add(eventRecord);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if (globalEventLog.size() &gt; 10000) {</span>
+<span class="nc" id="L171">            globalEventLog.remove(0);</span>
+        }
+<span class="nc" id="L173">    }</span>
+
+    public void sendPrivateMessage(String fromUser, String toUser, String content, long timestamp) {
+<span class="nc bnc" id="L176" title="All 4 branches missed.">        if (fromUser == null || fromUser.isEmpty()) {</span>
+<span class="nc" id="L177">            System.out.println(ANSI_RED + &quot;Error: Sender username cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L178">            return;</span>
+        }
+<span class="nc bnc" id="L180" title="All 4 branches missed.">        if (toUser == null || toUser.isEmpty()) {</span>
+<span class="nc" id="L181">            System.out.println(ANSI_RED + &quot;Error: Recipient username cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L182">            return;</span>
+        }
+<span class="nc bnc" id="L184" title="All 4 branches missed.">        if (content == null || content.isEmpty()) {</span>
+<span class="nc" id="L185">            System.out.println(ANSI_RED + &quot;Error: Message content cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L186">            return;</span>
+        }
+<span class="nc bnc" id="L188" title="All 2 branches missed.">        if (content.length() &gt; 500) {</span>
+<span class="nc" id="L189">            System.out.println(ANSI_RED + &quot;Error: Message too long (max 500 chars)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L190">            return;</span>
+        }
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if (fromUser.equals(toUser)) {</span>
+<span class="nc" id="L193">            System.out.println(ANSI_RED + &quot;Error: Cannot send private message to yourself&quot; + ANSI_RESET);</span>
+<span class="nc" id="L194">            return;</span>
+        }
+<span class="nc bnc" id="L196" title="All 4 branches missed.">        if (userMuteStatus.containsKey(fromUser) &amp;&amp; userMuteStatus.get(fromUser)) {</span>
+<span class="nc" id="L197">            System.out.println(ANSI_RED + &quot;You are currently muted and cannot send messages&quot; + ANSI_RESET);</span>
+<span class="nc" id="L198">            return;</span>
+        }
+<span class="nc" id="L200">        String processedContent = content;</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        if (profanityFilterEnabled) {</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            for (String badWord : BAD_WORDS) {</span>
+<span class="nc bnc" id="L203" title="All 2 branches missed.">                if (processedContent.toLowerCase().contains(badWord)) {</span>
+<span class="nc" id="L204">                    processedContent = processedContent.replaceAll(&quot;(?i)&quot; + badWord,</span>
+<span class="nc" id="L205">                            &quot;*&quot;.repeat(badWord.length()));</span>
+                }
+            }
+        }
+<span class="nc" id="L209">        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;);</span>
+<span class="nc" id="L210">        String timeStr = LocalDateTime.now().format(formatter);</span>
+<span class="nc" id="L211">        String fromColor = getUserColor(fromUser);</span>
+<span class="nc" id="L212">        String key = getPrivateKey(fromUser, toUser);</span>
+<span class="nc bnc" id="L213" title="All 2 branches missed.">        if (!privateMessages.containsKey(key)) {</span>
+<span class="nc" id="L214">            privateMessages.put(key, new ArrayList&lt;&gt;());</span>
+        }
+<span class="nc" id="L216">        String[] messageRecord = {fromUser, &quot;private&quot;, processedContent, &quot;private&quot;,</span>
+<span class="nc" id="L217">                String.valueOf(timestamp), timeStr, &quot;false&quot;, toUser};</span>
+<span class="nc" id="L218">        privateMessages.get(key).add(messageRecord);</span>
+<span class="nc" id="L219">        System.out.println(ANSI_PURPLE + &quot;[&quot; + timeStr + &quot;] [PM -&gt; &quot; + toUser + &quot;] &quot; +</span>
+                fromColor + ANSI_BOLD + fromUser + ANSI_RESET + ANSI_PURPLE + &quot;: &quot; +
+                processedContent + ANSI_RESET);
+        // Update counts
+<span class="nc" id="L223">        int currentCount = userMessageCounts.getOrDefault(fromUser, 0);</span>
+<span class="nc" id="L224">        userMessageCounts.put(fromUser, currentCount + 1);</span>
+<span class="nc" id="L225">        totalMessageCount++;</span>
+<span class="nc" id="L226">        String[] eventRecord = {&quot;PM&quot;, fromUser, toUser, timeStr, processedContent.substring(0, Math.min(50, processedContent.length()))};</span>
+<span class="nc" id="L227">        globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L228">    }</span>
+
+    public List&lt;String[]&gt; getRoomHistory(String room, int limit) {
+<span class="nc bnc" id="L231" title="All 4 branches missed.">        if (room == null || room.isEmpty()) {</span>
+<span class="nc" id="L232">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L234">        List&lt;String[]&gt; messages = roomMessages.getOrDefault(room, new ArrayList&lt;&gt;());</span>
+<span class="nc bnc" id="L235" title="All 2 branches missed.">        if (messages.isEmpty()) {</span>
+<span class="nc" id="L236">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L238">        int start = Math.max(0, messages.size() - limit);</span>
+<span class="nc" id="L239">        return new ArrayList&lt;&gt;(messages.subList(start, messages.size()));</span>
+    }
+
+    public List&lt;String[]&gt; searchMessages(String room, String query, String searchType,
+                                          String fromUser, long fromTime, long toTime) {
+<span class="nc" id="L244">        List&lt;String[]&gt; results = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L245" title="All 4 branches missed.">        if (query == null || query.isEmpty()) {</span>
+<span class="nc" id="L246">            return results;</span>
+        }
+<span class="nc" id="L248">        String lowerQuery = query.toLowerCase();</span>
+        List&lt;String[]&gt; messages;
+<span class="nc bnc" id="L250" title="All 6 branches missed.">        if (room != null &amp;&amp; !room.isEmpty() &amp;&amp; !room.equals(&quot;*&quot;)) {</span>
+<span class="nc" id="L251">            messages = roomMessages.getOrDefault(room, new ArrayList&lt;&gt;());</span>
+        } else {
+<span class="nc" id="L253">            messages = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            for (List&lt;String[]&gt; roomMsgs : roomMessages.values()) {</span>
+<span class="nc" id="L255">                messages.addAll(roomMsgs);</span>
+<span class="nc" id="L256">            }</span>
+        }
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        for (String[] msg : messages) {</span>
+<span class="nc bnc" id="L259" title="All 4 branches missed.">            if (msg == null || msg.length &lt; 6) {</span>
+<span class="nc" id="L260">                continue;</span>
+            }
+<span class="nc" id="L262">            String msgContent = msg[2].toLowerCase();</span>
+<span class="nc" id="L263">            String msgUser = msg[0];</span>
+<span class="nc" id="L264">            long msgTime = Long.parseLong(msg[4]);</span>
+<span class="nc" id="L265">            boolean contentMatch = false;</span>
+<span class="nc" id="L266">            boolean userMatch = true;</span>
+<span class="nc" id="L267">            boolean timeMatch = true;</span>
+<span class="nc bnc" id="L268" title="All 4 branches missed.">            if (searchType == null || searchType.equals(&quot;contains&quot;)) {</span>
+<span class="nc" id="L269">                contentMatch = msgContent.contains(lowerQuery);</span>
+<span class="nc bnc" id="L270" title="All 2 branches missed.">            } else if (searchType.equals(&quot;startsWith&quot;)) {</span>
+<span class="nc" id="L271">                contentMatch = msgContent.startsWith(lowerQuery);</span>
+<span class="nc bnc" id="L272" title="All 2 branches missed.">            } else if (searchType.equals(&quot;endsWith&quot;)) {</span>
+<span class="nc" id="L273">                contentMatch = msgContent.endsWith(lowerQuery);</span>
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            } else if (searchType.equals(&quot;exact&quot;)) {</span>
+<span class="nc" id="L275">                contentMatch = msgContent.equals(lowerQuery);</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">            } else if (searchType.equals(&quot;regex&quot;)) {</span>
+                try {
+<span class="nc" id="L278">                    contentMatch = msgContent.matches(&quot;.*&quot; + query.toLowerCase() + &quot;.*&quot;);</span>
+<span class="nc" id="L279">                } catch (Exception e) {</span>
+<span class="nc" id="L280">                    contentMatch = msgContent.contains(lowerQuery);</span>
+<span class="nc" id="L281">                }</span>
+            } else {
+<span class="nc" id="L283">                contentMatch = msgContent.contains(lowerQuery);</span>
+            }
+<span class="nc bnc" id="L285" title="All 6 branches missed.">            if (fromUser != null &amp;&amp; !fromUser.isEmpty() &amp;&amp; !fromUser.equals(&quot;*&quot;)) {</span>
+<span class="nc" id="L286">                userMatch = msgUser.equalsIgnoreCase(fromUser);</span>
+            }
+<span class="nc bnc" id="L288" title="All 2 branches missed.">            if (fromTime &gt; 0) {</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">                timeMatch = msgTime &gt;= fromTime;</span>
+            }
+<span class="nc bnc" id="L291" title="All 2 branches missed.">            if (toTime &gt; 0) {</span>
+<span class="nc bnc" id="L292" title="All 4 branches missed.">                timeMatch = timeMatch &amp;&amp; msgTime &lt;= toTime;</span>
+            }
+<span class="nc bnc" id="L294" title="All 6 branches missed.">            if (contentMatch &amp;&amp; userMatch &amp;&amp; timeMatch) {</span>
+<span class="nc" id="L295">                results.add(msg);</span>
+            }
+<span class="nc" id="L297">        }</span>
+<span class="nc" id="L298">        return results;</span>
+    }
+
+    public List&lt;String[]&gt; getPrivateHistory(String user1, String user2, int limit) {
+<span class="nc bnc" id="L302" title="All 4 branches missed.">        if (user1 == null || user2 == null) {</span>
+<span class="nc" id="L303">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L305">        String key = getPrivateKey(user1, user2);</span>
+<span class="nc" id="L306">        List&lt;String[]&gt; messages = privateMessages.getOrDefault(key, new ArrayList&lt;&gt;());</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        if (messages.isEmpty()) {</span>
+<span class="nc" id="L308">            return new ArrayList&lt;&gt;();</span>
+        }
+<span class="nc" id="L310">        int start = Math.max(0, messages.size() - limit);</span>
+<span class="nc" id="L311">        return new ArrayList&lt;&gt;(messages.subList(start, messages.size()));</span>
+    }
+
+    public void muteUser(String username) {
+<span class="nc" id="L315">        userMuteStatus.put(username, true);</span>
+<span class="nc" id="L316">    }</span>
+
+    public void unmuteUser(String username) {
+<span class="nc" id="L319">        userMuteStatus.put(username, false);</span>
+<span class="nc" id="L320">    }</span>
+
+    public List&lt;String&gt; getUserMentions(String username) {
+<span class="nc" id="L323">        return userMentions.getOrDefault(username, new ArrayList&lt;&gt;());</span>
+    }
+
+    public void clearUserMentions(String username) {
+<span class="nc" id="L327">        userMentions.remove(username);</span>
+<span class="nc" id="L328">    }</span>
+
+    public int getUserMessageCount(String username) {
+<span class="nc" id="L331">        return userMessageCounts.getOrDefault(username, 0);</span>
+    }
+
+    public int getTotalMessageCount() {
+<span class="nc" id="L335">        return totalMessageCount;</span>
+    }
+
+    public Map&lt;String, Integer&gt; getAllUserMessageCounts() {
+<span class="nc" id="L339">        Map&lt;String, Integer&gt; realCounts = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L340" title="All 2 branches missed.">        for (Map.Entry&lt;String, Integer&gt; entry : userMessageCounts.entrySet()) {</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">            if (!entry.getKey().endsWith(&quot;_ratelimit&quot;)) {</span>
+<span class="nc" id="L342">                realCounts.put(entry.getKey(), entry.getValue());</span>
+            }
+<span class="nc" id="L344">        }</span>
+<span class="nc" id="L345">        return realCounts;</span>
+    }
+
+    public void printRoomStatistics(String room) {
+<span class="nc bnc" id="L349" title="All 4 branches missed.">        if (room == null || room.isEmpty()) {</span>
+<span class="nc" id="L350">            System.out.println(ANSI_RED + &quot;Invalid room&quot; + ANSI_RESET);</span>
+<span class="nc" id="L351">            return;</span>
+        }
+<span class="nc" id="L353">        List&lt;String[]&gt; messages = roomMessages.getOrDefault(room, new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L354">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Room Statistics: &quot; + room + &quot; ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L355">        System.out.println(ANSI_WHITE + &quot;Total messages: &quot; + messages.size() + ANSI_RESET);</span>
+<span class="nc" id="L356">        Map&lt;String, Integer&gt; perUserCount = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L357">        int systemMessages = 0;</span>
+<span class="nc" id="L358">        int privateMessages_ = 0;</span>
+<span class="nc" id="L359">        int longMessages = 0;</span>
+<span class="nc" id="L360">        int shortMessages = 0;</span>
+<span class="nc" id="L361">        int mentionMessages = 0;</span>
+<span class="nc bnc" id="L362" title="All 2 branches missed.">        for (String[] msg : messages) {</span>
+<span class="nc bnc" id="L363" title="All 4 branches missed.">            if (msg == null || msg.length &lt; 4) {</span>
+<span class="nc" id="L364">                continue;</span>
+            }
+<span class="nc" id="L366">            String user = msg[0];</span>
+<span class="nc" id="L367">            String type = msg[3];</span>
+<span class="nc" id="L368">            String content = msg[2];</span>
+<span class="nc bnc" id="L369" title="All 4 branches missed.">            if (type.equals(&quot;system&quot;) || Boolean.parseBoolean(msg[6])) {</span>
+<span class="nc" id="L370">                systemMessages++;</span>
+<span class="nc bnc" id="L371" title="All 2 branches missed.">            } else if (type.equals(&quot;private&quot;)) {</span>
+<span class="nc" id="L372">                privateMessages_++;</span>
+            } else {
+<span class="nc" id="L374">                int count = perUserCount.getOrDefault(user, 0);</span>
+<span class="nc" id="L375">                perUserCount.put(user, count + 1);</span>
+            }
+<span class="nc bnc" id="L377" title="All 2 branches missed.">            if (content.length() &gt; 200) {</span>
+<span class="nc" id="L378">                longMessages++;</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">            } else if (content.length() &lt; 10) {</span>
+<span class="nc" id="L380">                shortMessages++;</span>
+            }
+<span class="nc bnc" id="L382" title="All 2 branches missed.">            if (content.contains(&quot;@&quot;)) {</span>
+<span class="nc" id="L383">                mentionMessages++;</span>
+            }
+<span class="nc" id="L385">        }</span>
+<span class="nc" id="L386">        System.out.println(ANSI_WHITE + &quot;System messages: &quot; + systemMessages + ANSI_RESET);</span>
+<span class="nc" id="L387">        System.out.println(ANSI_WHITE + &quot;Messages with mentions: &quot; + mentionMessages + ANSI_RESET);</span>
+<span class="nc" id="L388">        System.out.println(ANSI_WHITE + &quot;Long messages (&gt;200 chars): &quot; + longMessages + ANSI_RESET);</span>
+<span class="nc" id="L389">        System.out.println(ANSI_WHITE + &quot;Short messages (&lt;10 chars): &quot; + shortMessages + ANSI_RESET);</span>
+<span class="nc" id="L390">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;Top contributors:&quot; + ANSI_RESET);</span>
+<span class="nc" id="L391">        List&lt;Map.Entry&lt;String, Integer&gt;&gt; sorted = new ArrayList&lt;&gt;(perUserCount.entrySet());</span>
+<span class="nc" id="L392">        sorted.sort((a, b) -&gt; b.getValue().compareTo(a.getValue()));</span>
+<span class="nc" id="L393">        int displayCount = Math.min(5, sorted.size());</span>
+<span class="nc bnc" id="L394" title="All 2 branches missed.">        for (int i = 0; i &lt; displayCount; i++) {</span>
+<span class="nc" id="L395">            Map.Entry&lt;String, Integer&gt; entry = sorted.get(i);</span>
+<span class="nc" id="L396">            String userColor = getUserColor(entry.getKey());</span>
+<span class="nc" id="L397">            System.out.println(&quot;  &quot; + (i + 1) + &quot;. &quot; + userColor + ANSI_BOLD + entry.getKey() +</span>
+<span class="nc" id="L398">                    ANSI_RESET + &quot;: &quot; + entry.getValue() + &quot; messages&quot;);</span>
+        }
+<span class="nc" id="L400">    }</span>
+
+    private String getUserColor(String username) {
+<span class="nc bnc" id="L403" title="All 2 branches missed.">        if (!userColors.containsKey(username)) {</span>
+<span class="nc" id="L404">            int hash = Math.abs(username.hashCode());</span>
+<span class="nc" id="L405">            userColors.put(username, USER_COLORS[hash % USER_COLORS.length]);</span>
+        }
+<span class="nc" id="L407">        return userColors.get(username);</span>
+    }
+
+    private String getPrivateKey(String user1, String user2) {
+<span class="nc bnc" id="L411" title="All 2 branches missed.">        if (user1.compareTo(user2) &lt; 0) {</span>
+<span class="nc" id="L412">            return user1 + &quot;:&quot; + user2;</span>
+        }
+<span class="nc" id="L414">        return user2 + &quot;:&quot; + user1;</span>
+    }
+
+    public void broadcastRoomEvent(String room, String eventType, String username, String detail) {
+<span class="nc" id="L418">        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;));</span>
+<span class="nc bnc" id="L419" title="All 4 branches missed.">        if (eventType == null || eventType.isEmpty()) {</span>
+<span class="nc" id="L420">            return;</span>
+        }
+<span class="nc bnc" id="L422" title="All 2 branches missed.">        if (eventType.equals(&quot;JOIN&quot;)) {</span>
+<span class="nc" id="L423">            String joinMsg = username + &quot; has joined the room&quot;;</span>
+<span class="nc bnc" id="L424" title="All 4 branches missed.">            if (detail != null &amp;&amp; !detail.isEmpty()) {</span>
+<span class="nc" id="L425">                joinMsg = joinMsg + &quot; (&quot; + detail + &quot;)&quot;;</span>
+            }
+<span class="nc" id="L427">            System.out.println(ANSI_GREEN + &quot;[&quot; + timeStr + &quot;] *** &quot; + joinMsg + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L428" title="All 2 branches missed.">            String[] eventRecord = {&quot;JOIN&quot;, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L429">            globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L430">            String[] msgRecord = {username, room, joinMsg, &quot;system&quot;, String.valueOf(System.currentTimeMillis()), timeStr, &quot;true&quot;, &quot;&quot;};</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L432">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L434">            roomMessages.get(room).add(msgRecord);</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">        } else if (eventType.equals(&quot;LEAVE&quot;)) {</span>
+<span class="nc" id="L436">            String leaveMsg = username + &quot; has left the room&quot;;</span>
+<span class="nc bnc" id="L437" title="All 4 branches missed.">            if (detail != null &amp;&amp; !detail.isEmpty()) {</span>
+<span class="nc" id="L438">                leaveMsg = leaveMsg + &quot; (&quot; + detail + &quot;)&quot;;</span>
+            }
+<span class="nc" id="L440">            System.out.println(ANSI_YELLOW + &quot;[&quot; + timeStr + &quot;] *** &quot; + leaveMsg + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            String[] eventRecord = {&quot;LEAVE&quot;, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L442">            globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L443">            String[] msgRecord = {username, room, leaveMsg, &quot;system&quot;, String.valueOf(System.currentTimeMillis()), timeStr, &quot;true&quot;, &quot;&quot;};</span>
+<span class="nc bnc" id="L444" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L445">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L447">            roomMessages.get(room).add(msgRecord);</span>
+<span class="nc bnc" id="L448" title="All 2 branches missed.">        } else if (eventType.equals(&quot;KICKED&quot;)) {</span>
+<span class="nc" id="L449">            String kickMsg = username + &quot; was kicked from the room&quot;;</span>
+<span class="nc bnc" id="L450" title="All 4 branches missed.">            if (detail != null &amp;&amp; !detail.isEmpty()) {</span>
+<span class="nc" id="L451">                kickMsg = kickMsg + &quot;: &quot; + detail;</span>
+            }
+<span class="nc" id="L453">            System.out.println(ANSI_RED + &quot;[&quot; + timeStr + &quot;] *** &quot; + kickMsg + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L454" title="All 2 branches missed.">            String[] eventRecord = {&quot;KICKED&quot;, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L455">            globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L456">            String[] msgRecord = {username, room, kickMsg, &quot;system&quot;, String.valueOf(System.currentTimeMillis()), timeStr, &quot;true&quot;, &quot;&quot;};</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L458">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L460">            roomMessages.get(room).add(msgRecord);</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">        } else if (eventType.equals(&quot;RENAMED&quot;)) {</span>
+<span class="nc" id="L462">            String renameMsg = &quot;Room was renamed to: &quot; + detail;</span>
+<span class="nc" id="L463">            System.out.println(ANSI_CYAN + &quot;[&quot; + timeStr + &quot;] *** &quot; + renameMsg + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L464" title="All 2 branches missed.">            String[] eventRecord = {&quot;RENAMED&quot;, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L465">            globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L466">            String[] msgRecord = {username, room, renameMsg, &quot;system&quot;, String.valueOf(System.currentTimeMillis()), timeStr, &quot;true&quot;, &quot;&quot;};</span>
+<span class="nc bnc" id="L467" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L468">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L470">            roomMessages.get(room).add(msgRecord);</span>
+<span class="nc bnc" id="L471" title="All 2 branches missed.">        } else if (eventType.equals(&quot;TOPIC_CHANGED&quot;)) {</span>
+<span class="nc" id="L472">            String topicMsg = username + &quot; changed the topic to: &quot; + detail;</span>
+<span class="nc" id="L473">            System.out.println(ANSI_BLUE + &quot;[&quot; + timeStr + &quot;] *** &quot; + topicMsg + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L474" title="All 2 branches missed.">            String[] eventRecord = {&quot;TOPIC&quot;, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L475">            globalEventLog.add(eventRecord);</span>
+<span class="nc" id="L476">            String[] msgRecord = {username, room, topicMsg, &quot;system&quot;, String.valueOf(System.currentTimeMillis()), timeStr, &quot;true&quot;, &quot;&quot;};</span>
+<span class="nc bnc" id="L477" title="All 2 branches missed.">            if (!roomMessages.containsKey(room)) {</span>
+<span class="nc" id="L478">                roomMessages.put(room, new ArrayList&lt;&gt;());</span>
+            }
+<span class="nc" id="L480">            roomMessages.get(room).add(msgRecord);</span>
+<span class="nc" id="L481">        } else {</span>
+<span class="nc" id="L482">            System.out.println(ANSI_WHITE + &quot;[&quot; + timeStr + &quot;] *** [&quot; + eventType + &quot;] &quot; + username + &quot;: &quot; + detail + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L483" title="All 2 branches missed.">            String[] eventRecord = {eventType, username, room, timeStr, detail != null ? detail : &quot;&quot;};</span>
+<span class="nc" id="L484">            globalEventLog.add(eventRecord);</span>
+        }
+<span class="nc" id="L486">    }</span>
+
+    public void printMessageHistory(String room, int limit, String username) {
+<span class="nc" id="L489">        List&lt;String[]&gt; history = getRoomHistory(room, limit);</span>
+<span class="nc bnc" id="L490" title="All 2 branches missed.">        if (history.isEmpty()) {</span>
+<span class="nc" id="L491">            System.out.println(ANSI_YELLOW + &quot;No message history for room: &quot; + room + ANSI_RESET);</span>
+<span class="nc" id="L492">            return;</span>
+        }
+<span class="nc" id="L494">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Last &quot; + history.size() + &quot; messages in #&quot; + room + &quot; ===&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L495" title="All 2 branches missed.">        for (String[] msg : history) {</span>
+<span class="nc bnc" id="L496" title="All 4 branches missed.">            if (msg == null || msg.length &lt; 7) {</span>
+<span class="nc" id="L497">                continue;</span>
+            }
+<span class="nc" id="L499">            String msgUser = msg[0];</span>
+<span class="nc" id="L500">            String msgContent = msg[2];</span>
+<span class="nc" id="L501">            String msgTime = msg[5];</span>
+<span class="nc" id="L502">            boolean isSystemMsg = Boolean.parseBoolean(msg[6]);</span>
+<span class="nc bnc" id="L503" title="All 2 branches missed.">            if (isSystemMsg) {</span>
+<span class="nc" id="L504">                System.out.println(ANSI_CYAN + &quot;[&quot; + msgTime + &quot;] *** &quot; + msgContent + &quot; ***&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L505" title="All 2 branches missed.">            } else if (msgUser.equals(username)) {</span>
+<span class="nc" id="L506">                System.out.println(ANSI_GREEN + &quot;[&quot; + msgTime + &quot;] &quot; + ANSI_BOLD + msgUser + ANSI_RESET +</span>
+                        ANSI_GREEN + &quot;: &quot; + msgContent + ANSI_RESET);
+            } else {
+<span class="nc" id="L509">                String userColor = getUserColor(msgUser);</span>
+<span class="nc" id="L510">                System.out.println(ANSI_WHITE + &quot;[&quot; + msgTime + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                        msgUser + ANSI_RESET + ANSI_WHITE + &quot;: &quot; + msgContent + ANSI_RESET);
+            }
+<span class="nc" id="L513">        }</span>
+<span class="nc" id="L514">        System.out.println(ANSI_CYAN + &quot;=== End of history ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L515">    }</span>
+
+    public void printSearchResults(List&lt;String[]&gt; results, String query) {
+<span class="nc bnc" id="L518" title="All 4 branches missed.">        if (results == null || results.isEmpty()) {</span>
+<span class="nc" id="L519">            System.out.println(ANSI_YELLOW + &quot;No results found for: &quot; + query + ANSI_RESET);</span>
+<span class="nc" id="L520">            return;</span>
+        }
+<span class="nc" id="L522">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Search results for '&quot; + query + &quot;' (&quot; + results.size() + &quot; found) ===&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">        for (String[] msg : results) {</span>
+<span class="nc bnc" id="L524" title="All 4 branches missed.">            if (msg == null || msg.length &lt; 6) {</span>
+<span class="nc" id="L525">                continue;</span>
+            }
+<span class="nc" id="L527">            String msgUser = msg[0];</span>
+<span class="nc" id="L528">            String msgRoom = msg[1];</span>
+<span class="nc" id="L529">            String msgContent = msg[2];</span>
+<span class="nc" id="L530">            String msgTime = msg[5];</span>
+<span class="nc bnc" id="L531" title="All 4 branches missed.">            boolean isSystemMsg = msg.length &gt; 6 &amp;&amp; Boolean.parseBoolean(msg[6]);</span>
+<span class="nc" id="L532">            String userColor = getUserColor(msgUser);</span>
+<span class="nc bnc" id="L533" title="All 2 branches missed.">            if (isSystemMsg) {</span>
+<span class="nc" id="L534">                System.out.println(ANSI_CYAN + &quot;[&quot; + msgTime + &quot;] [#&quot; + msgRoom + &quot;] *** &quot; + msgContent + &quot; ***&quot; + ANSI_RESET);</span>
+            } else {
+                // Highlight the query in results
+<span class="nc" id="L537">                String highlighted = msgContent.replaceAll(&quot;(?i)&quot; + query, ANSI_YELLOW + ANSI_BOLD + &quot;$0&quot; + ANSI_RESET + ANSI_WHITE);</span>
+<span class="nc" id="L538">                System.out.println(ANSI_WHITE + &quot;[&quot; + msgTime + &quot;] [#&quot; + msgRoom + &quot;] &quot; + userColor + ANSI_BOLD +</span>
+                        msgUser + ANSI_RESET + ANSI_WHITE + &quot;: &quot; + highlighted + ANSI_RESET);
+            }
+<span class="nc" id="L541">        }</span>
+<span class="nc" id="L542">        System.out.println(ANSI_CYAN + &quot;=== End of search results ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L543">    }</span>
+
+<span class="nc" id="L545">    public void setRateLimitEnabled(boolean enabled) { this.rateLimitEnabled = enabled; }</span>
+<span class="nc" id="L546">    public void setProfanityFilterEnabled(boolean enabled) { this.profanityFilterEnabled = enabled; }</span>
+<span class="nc" id="L547">    public boolean isRateLimitEnabled() { return rateLimitEnabled; }</span>
+<span class="nc" id="L548">    public boolean isProfanityFilterEnabled() { return profanityFilterEnabled; }</span>
+<span class="nc" id="L549">    public List&lt;String[]&gt; getGlobalEventLog() { return globalEventLog; }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

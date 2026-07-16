@@ -1,0 +1,644 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Java TUI Chat Application</a> &gt; <a href="index.source.html" class="el_package">com.chatapp</a> &gt; <span class="el_source">UserManager.java</span></div><h1>UserManager.java</h1><pre class="source lang-java linenums">package com.chatapp;
+
+import java.util.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+/**
+ * Manages users: registration, authentication, status, profiles, and permissions.
+ */
+public class UserManager {
+
+    private static final String ANSI_RESET = &quot;\u001B[0m&quot;;
+    private static final String ANSI_RED = &quot;\u001B[31m&quot;;
+    private static final String ANSI_GREEN = &quot;\u001B[32m&quot;;
+    private static final String ANSI_YELLOW = &quot;\u001B[33m&quot;;
+    private static final String ANSI_BLUE = &quot;\u001B[34m&quot;;
+    private static final String ANSI_PURPLE = &quot;\u001B[35m&quot;;
+    private static final String ANSI_CYAN = &quot;\u001B[36m&quot;;
+    private static final String ANSI_WHITE = &quot;\u001B[37m&quot;;
+    private static final String ANSI_BOLD = &quot;\u001B[1m&quot;;
+
+    private static final int MAX_USERNAME_LENGTH = 20;
+    private static final int MIN_USERNAME_LENGTH = 3;
+    private static final int MAX_USERS = 1000;
+    private static final int MAX_BIO_LENGTH = 200;
+
+    // user data: username -&gt; field map
+    private Map&lt;String, Map&lt;String, String&gt;&gt; users;
+    // blocked relationships: username -&gt; set of blocked users
+    private Map&lt;String, Set&lt;String&gt;&gt; blockedUsers;
+    // friend relationships: username -&gt; set of friends
+    private Map&lt;String, Set&lt;String&gt;&gt; friends;
+    // admin users set
+    private Set&lt;String&gt; admins;
+    // moderator users set
+    private Set&lt;String&gt; moderators;
+    // banned users
+    private Map&lt;String, String&gt; bannedUsers; // username -&gt; reason
+    // user sessions - track login times
+    private Map&lt;String, Long&gt; loginTimes;
+    private Map&lt;String, Long&gt; lastActiveTime;
+    private Map&lt;String, String&gt; userStatus; // online, away, busy, offline
+    private Map&lt;String, String&gt; userStatusMessage;
+    private Map&lt;String, List&lt;String&gt;&gt; userNotifications;
+    private Map&lt;String, Integer&gt; warningCount;
+
+<span class="nc" id="L47">    public UserManager() {</span>
+<span class="nc" id="L48">        this.users = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L49">        this.blockedUsers = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L50">        this.friends = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L51">        this.admins = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L52">        this.moderators = new HashSet&lt;&gt;();</span>
+<span class="nc" id="L53">        this.bannedUsers = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L54">        this.loginTimes = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L55">        this.lastActiveTime = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L56">        this.userStatus = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L57">        this.userStatusMessage = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L58">        this.userNotifications = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L59">        this.warningCount = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L60">    }</span>
+
+    public boolean registerUser(String username) {
+<span class="nc bnc" id="L63" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L64">            System.out.println(ANSI_RED + &quot;Registration failed: Username cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L65">            return false;</span>
+        }
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (username.length() &lt; MIN_USERNAME_LENGTH) {</span>
+<span class="nc" id="L68">            System.out.println(ANSI_RED + &quot;Registration failed: Username too short (min &quot; + MIN_USERNAME_LENGTH + &quot;)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L69">            return false;</span>
+        }
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if (username.length() &gt; MAX_USERNAME_LENGTH) {</span>
+<span class="nc" id="L72">            System.out.println(ANSI_RED + &quot;Registration failed: Username too long (max &quot; + MAX_USERNAME_LENGTH + &quot;)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L73">            return false;</span>
+        }
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if (!username.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L76">            System.out.println(ANSI_RED + &quot;Registration failed: Username contains invalid characters&quot; + ANSI_RESET);</span>
+<span class="nc" id="L77">            return false;</span>
+        }
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (users.containsKey(username)) {</span>
+<span class="nc" id="L80">            System.out.println(ANSI_YELLOW + &quot;User '&quot; + username + &quot;' already registered, updating login time&quot; + ANSI_RESET);</span>
+<span class="nc" id="L81">            loginTimes.put(username, System.currentTimeMillis());</span>
+<span class="nc" id="L82">            userStatus.put(username, &quot;online&quot;);</span>
+<span class="nc" id="L83">            lastActiveTime.put(username, System.currentTimeMillis());</span>
+<span class="nc" id="L84">            return true;</span>
+        }
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if (users.size() &gt;= MAX_USERS) {</span>
+<span class="nc" id="L87">            System.out.println(ANSI_RED + &quot;Registration failed: Maximum user limit reached&quot; + ANSI_RESET);</span>
+<span class="nc" id="L88">            return false;</span>
+        }
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if (bannedUsers.containsKey(username)) {</span>
+<span class="nc" id="L91">            System.out.println(ANSI_RED + &quot;Registration failed: User '&quot; + username + &quot;' is banned: &quot; + bannedUsers.get(username) + ANSI_RESET);</span>
+<span class="nc" id="L92">            return false;</span>
+        }
+<span class="nc" id="L94">        Map&lt;String, String&gt; profile = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L95">        profile.put(&quot;username&quot;, username);</span>
+<span class="nc" id="L96">        profile.put(&quot;joinDate&quot;, LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd HH:mm:ss&quot;)));</span>
+<span class="nc" id="L97">        profile.put(&quot;bio&quot;, &quot;&quot;);</span>
+<span class="nc" id="L98">        profile.put(&quot;messageCount&quot;, &quot;0&quot;);</span>
+<span class="nc" id="L99">        profile.put(&quot;currentRoom&quot;, &quot;&quot;);</span>
+<span class="nc" id="L100">        profile.put(&quot;avatarColor&quot;, String.valueOf(Math.abs(username.hashCode()) % 7));</span>
+<span class="nc" id="L101">        users.put(username, profile);</span>
+<span class="nc" id="L102">        loginTimes.put(username, System.currentTimeMillis());</span>
+<span class="nc" id="L103">        lastActiveTime.put(username, System.currentTimeMillis());</span>
+<span class="nc" id="L104">        userStatus.put(username, &quot;online&quot;);</span>
+<span class="nc" id="L105">        blockedUsers.put(username, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L106">        friends.put(username, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L107">        userNotifications.put(username, new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L108">        warningCount.put(username, 0);</span>
+<span class="nc" id="L109">        return true;</span>
+    }
+
+    public void unregisterUser(String username) {
+<span class="nc bnc" id="L113" title="All 4 branches missed.">        if (username == null || !users.containsKey(username)) {</span>
+<span class="nc" id="L114">            return;</span>
+        }
+<span class="nc" id="L116">        userStatus.put(username, &quot;offline&quot;);</span>
+<span class="nc" id="L117">        loginTimes.remove(username);</span>
+<span class="nc" id="L118">        lastActiveTime.put(username, System.currentTimeMillis());</span>
+<span class="nc" id="L119">    }</span>
+
+    public boolean isUsernameTaken(String username) {
+<span class="nc" id="L122">        return users.containsKey(username);</span>
+    }
+
+    public boolean isUserOnline(String username) {
+<span class="nc bnc" id="L126" title="All 2 branches missed.">        if (!users.containsKey(username)) {</span>
+<span class="nc" id="L127">            return false;</span>
+        }
+<span class="nc" id="L129">        String status = userStatus.getOrDefault(username, &quot;offline&quot;);</span>
+<span class="nc bnc" id="L130" title="All 6 branches missed.">        return &quot;online&quot;.equals(status) || &quot;away&quot;.equals(status) || &quot;busy&quot;.equals(status);</span>
+    }
+
+    public String getUserStatus(String username) {
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if (!users.containsKey(username)) {</span>
+<span class="nc" id="L135">            return &quot;unknown&quot;;</span>
+        }
+<span class="nc" id="L137">        return userStatus.getOrDefault(username, &quot;offline&quot;);</span>
+    }
+
+    public void setUserStatus(String username, String status) {
+<span class="nc bnc" id="L141" title="All 4 branches missed.">        if (username == null || !users.containsKey(username)) {</span>
+<span class="nc" id="L142">            return;</span>
+        }
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if (status == null) {</span>
+<span class="nc" id="L145">            return;</span>
+        }
+<span class="nc" id="L147">        String normalizedStatus = status.toLowerCase();</span>
+<span class="nc bnc" id="L148" title="All 4 branches missed.">        if (!normalizedStatus.equals(&quot;online&quot;) &amp;&amp; !normalizedStatus.equals(&quot;away&quot;) &amp;&amp;</span>
+<span class="nc bnc" id="L149" title="All 4 branches missed.">                !normalizedStatus.equals(&quot;busy&quot;) &amp;&amp; !normalizedStatus.equals(&quot;offline&quot;)) {</span>
+<span class="nc" id="L150">            System.out.println(ANSI_RED + &quot;Invalid status: &quot; + status + &quot;. Use: online/away/busy/offline&quot; + ANSI_RESET);</span>
+<span class="nc" id="L151">            return;</span>
+        }
+<span class="nc" id="L153">        userStatus.put(username, normalizedStatus);</span>
+<span class="nc" id="L154">        lastActiveTime.put(username, System.currentTimeMillis());</span>
+<span class="nc bnc" id="L155" title="All 5 branches missed.">        switch (normalizedStatus) {</span>
+            case &quot;online&quot;:
+<span class="nc" id="L157">                System.out.println(ANSI_GREEN + &quot;Status set to: online&quot; + ANSI_RESET);</span>
+<span class="nc" id="L158">                break;</span>
+            case &quot;away&quot;:
+<span class="nc" id="L160">                System.out.println(ANSI_YELLOW + &quot;Status set to: away&quot; + ANSI_RESET);</span>
+<span class="nc" id="L161">                break;</span>
+            case &quot;busy&quot;:
+<span class="nc" id="L163">                System.out.println(ANSI_RED + &quot;Status set to: busy&quot; + ANSI_RESET);</span>
+<span class="nc" id="L164">                break;</span>
+            case &quot;offline&quot;:
+<span class="nc" id="L166">                System.out.println(ANSI_WHITE + &quot;Status set to: offline&quot; + ANSI_RESET);</span>
+                break;
+        }
+<span class="nc" id="L169">    }</span>
+
+    public void setStatusMessage(String username, String message) {
+<span class="nc bnc" id="L172" title="All 4 branches missed.">        if (username == null || !users.containsKey(username)) {</span>
+<span class="nc" id="L173">            return;</span>
+        }
+<span class="nc bnc" id="L175" title="All 4 branches missed.">        if (message != null &amp;&amp; message.length() &gt; 100) {</span>
+<span class="nc" id="L176">            System.out.println(ANSI_RED + &quot;Status message too long (max 100 chars)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L177">            return;</span>
+        }
+<span class="nc bnc" id="L179" title="All 2 branches missed.">        userStatusMessage.put(username, message != null ? message : &quot;&quot;);</span>
+<span class="nc" id="L180">    }</span>
+
+    public boolean blockUser(String username, String targetUser) {
+<span class="nc bnc" id="L183" title="All 4 branches missed.">        if (username == null || targetUser == null) {</span>
+<span class="nc" id="L184">            return false;</span>
+        }
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if (username.equals(targetUser)) {</span>
+<span class="nc" id="L187">            System.out.println(ANSI_RED + &quot;Cannot block yourself&quot; + ANSI_RESET);</span>
+<span class="nc" id="L188">            return false;</span>
+        }
+<span class="nc bnc" id="L190" title="All 2 branches missed.">        if (!users.containsKey(targetUser)) {</span>
+<span class="nc" id="L191">            System.out.println(ANSI_RED + &quot;User not found: &quot; + targetUser + ANSI_RESET);</span>
+<span class="nc" id="L192">            return false;</span>
+        }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if (!blockedUsers.containsKey(username)) {</span>
+<span class="nc" id="L195">            blockedUsers.put(username, new HashSet&lt;&gt;());</span>
+        }
+<span class="nc" id="L197">        blockedUsers.get(username).add(targetUser);</span>
+<span class="nc" id="L198">        System.out.println(ANSI_YELLOW + &quot;You have blocked &quot; + targetUser + ANSI_RESET);</span>
+<span class="nc" id="L199">        return true;</span>
+    }
+
+    public boolean unblockUser(String username, String targetUser) {
+<span class="nc bnc" id="L203" title="All 4 branches missed.">        if (username == null || targetUser == null) {</span>
+<span class="nc" id="L204">            return false;</span>
+        }
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if (!blockedUsers.containsKey(username)) {</span>
+<span class="nc" id="L207">            return false;</span>
+        }
+<span class="nc" id="L209">        boolean removed = blockedUsers.get(username).remove(targetUser);</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if (removed) {</span>
+<span class="nc" id="L211">            System.out.println(ANSI_GREEN + &quot;You have unblocked &quot; + targetUser + ANSI_RESET);</span>
+        } else {
+<span class="nc" id="L213">            System.out.println(ANSI_YELLOW + targetUser + &quot; is not in your block list&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L215">        return removed;</span>
+    }
+
+    public boolean isBlocked(String username, String targetUser) {
+<span class="nc bnc" id="L219" title="All 4 branches missed.">        if (username == null || targetUser == null) {</span>
+<span class="nc" id="L220">            return false;</span>
+        }
+<span class="nc" id="L222">        Set&lt;String&gt; blocked = blockedUsers.getOrDefault(username, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L223">        return blocked.contains(targetUser);</span>
+    }
+
+    public boolean addFriend(String username, String friendName) {
+<span class="nc bnc" id="L227" title="All 4 branches missed.">        if (username == null || friendName == null) {</span>
+<span class="nc" id="L228">            return false;</span>
+        }
+<span class="nc bnc" id="L230" title="All 2 branches missed.">        if (username.equals(friendName)) {</span>
+<span class="nc" id="L231">            System.out.println(ANSI_RED + &quot;Cannot add yourself as friend&quot; + ANSI_RESET);</span>
+<span class="nc" id="L232">            return false;</span>
+        }
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        if (!users.containsKey(friendName)) {</span>
+<span class="nc" id="L235">            System.out.println(ANSI_RED + &quot;User not found: &quot; + friendName + ANSI_RESET);</span>
+<span class="nc" id="L236">            return false;</span>
+        }
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (!friends.containsKey(username)) {</span>
+<span class="nc" id="L239">            friends.put(username, new HashSet&lt;&gt;());</span>
+        }
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if (friends.get(username).contains(friendName)) {</span>
+<span class="nc" id="L242">            System.out.println(ANSI_YELLOW + friendName + &quot; is already in your friend list&quot; + ANSI_RESET);</span>
+<span class="nc" id="L243">            return false;</span>
+        }
+<span class="nc" id="L245">        friends.get(username).add(friendName);</span>
+<span class="nc" id="L246">        System.out.println(ANSI_GREEN + &quot;Added &quot; + friendName + &quot; to your friend list&quot; + ANSI_RESET);</span>
+<span class="nc" id="L247">        return true;</span>
+    }
+
+    public Set&lt;String&gt; getFriends(String username) {
+<span class="nc" id="L251">        return friends.getOrDefault(username, new HashSet&lt;&gt;());</span>
+    }
+
+    public void updateBio(String username, String bio) {
+<span class="nc bnc" id="L255" title="All 4 branches missed.">        if (username == null || !users.containsKey(username)) {</span>
+<span class="nc" id="L256">            System.out.println(ANSI_RED + &quot;User not found: &quot; + username + ANSI_RESET);</span>
+<span class="nc" id="L257">            return;</span>
+        }
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (bio == null) {</span>
+<span class="nc" id="L260">            bio = &quot;&quot;;</span>
+        }
+<span class="nc bnc" id="L262" title="All 2 branches missed.">        if (bio.length() &gt; MAX_BIO_LENGTH) {</span>
+<span class="nc" id="L263">            System.out.println(ANSI_RED + &quot;Bio too long (max &quot; + MAX_BIO_LENGTH + &quot; chars)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L264">            return;</span>
+        }
+<span class="nc" id="L266">        users.get(username).put(&quot;bio&quot;, bio);</span>
+<span class="nc" id="L267">        System.out.println(ANSI_GREEN + &quot;Bio updated successfully&quot; + ANSI_RESET);</span>
+<span class="nc" id="L268">    }</span>
+
+    public void printUserProfile(String username, String viewerUsername) {
+<span class="nc bnc" id="L271" title="All 4 branches missed.">        if (username == null || !users.containsKey(username)) {</span>
+<span class="nc" id="L272">            System.out.println(ANSI_RED + &quot;User not found: &quot; + username + ANSI_RESET);</span>
+<span class="nc" id="L273">            return;</span>
+        }
+<span class="nc" id="L275">        Map&lt;String, String&gt; profile = users.get(username);</span>
+<span class="nc" id="L276">        String status = userStatus.getOrDefault(username, &quot;offline&quot;);</span>
+        String statusColor;
+<span class="nc bnc" id="L278" title="All 2 branches missed.">        if (status.equals(&quot;online&quot;)) {</span>
+<span class="nc" id="L279">            statusColor = ANSI_GREEN;</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        } else if (status.equals(&quot;away&quot;)) {</span>
+<span class="nc" id="L281">            statusColor = ANSI_YELLOW;</span>
+<span class="nc bnc" id="L282" title="All 2 branches missed.">        } else if (status.equals(&quot;busy&quot;)) {</span>
+<span class="nc" id="L283">            statusColor = ANSI_RED;</span>
+        } else {
+<span class="nc" id="L285">            statusColor = ANSI_WHITE;</span>
+        }
+<span class="nc" id="L287">        System.out.println(ANSI_CYAN + ANSI_BOLD + &quot;=== Profile: &quot; + username + &quot; ===&quot; + ANSI_RESET);</span>
+<span class="nc" id="L288">        System.out.println(ANSI_WHITE + &quot;Status: &quot; + statusColor + status + ANSI_RESET);</span>
+<span class="nc" id="L289">        String statusMsg = userStatusMessage.getOrDefault(username, &quot;&quot;);</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">        if (!statusMsg.isEmpty()) {</span>
+<span class="nc" id="L291">            System.out.println(ANSI_WHITE + &quot;Status message: &quot; + statusMsg + ANSI_RESET);</span>
+        }
+<span class="nc" id="L293">        System.out.println(ANSI_WHITE + &quot;Joined: &quot; + profile.getOrDefault(&quot;joinDate&quot;, &quot;unknown&quot;) + ANSI_RESET);</span>
+<span class="nc" id="L294">        String bio = profile.getOrDefault(&quot;bio&quot;, &quot;&quot;);</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if (!bio.isEmpty()) {</span>
+<span class="nc" id="L296">            System.out.println(ANSI_WHITE + &quot;Bio: &quot; + bio + ANSI_RESET);</span>
+        }
+<span class="nc" id="L298">        System.out.println(ANSI_WHITE + &quot;Messages sent: &quot; + profile.getOrDefault(&quot;messageCount&quot;, &quot;0&quot;) + ANSI_RESET);</span>
+<span class="nc bnc" id="L299" title="All 2 branches missed.">        if (admins.contains(username)) {</span>
+<span class="nc" id="L300">            System.out.println(ANSI_RED + ANSI_BOLD + &quot;[ADMIN]&quot; + ANSI_RESET);</span>
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        } else if (moderators.contains(username)) {</span>
+<span class="nc" id="L302">            System.out.println(ANSI_PURPLE + ANSI_BOLD + &quot;[MOD]&quot; + ANSI_RESET);</span>
+        }
+<span class="nc" id="L304">        Long loginTime = loginTimes.get(username);</span>
+<span class="nc bnc" id="L305" title="All 4 branches missed.">        if (loginTime != null &amp;&amp; isUserOnline(username)) {</span>
+<span class="nc" id="L306">            long onlineSecs = (System.currentTimeMillis() - loginTime) / 1000;</span>
+<span class="nc" id="L307">            System.out.println(ANSI_WHITE + &quot;Online for: &quot; + formatDuration(onlineSecs) + ANSI_RESET);</span>
+        }
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        if (viewerUsername != null &amp;&amp; viewerUsername.equals(username)) {</span>
+<span class="nc" id="L310">            System.out.println(ANSI_CYAN + &quot;Friends: &quot; + friends.getOrDefault(username, new HashSet&lt;&gt;()).size() + ANSI_RESET);</span>
+<span class="nc" id="L311">            System.out.println(ANSI_CYAN + &quot;Blocked: &quot; + blockedUsers.getOrDefault(username, new HashSet&lt;&gt;()).size() + ANSI_RESET);</span>
+        }
+<span class="nc" id="L313">    }</span>
+
+    public List&lt;String&gt; getOnlineUsers() {
+<span class="nc" id="L316">        List&lt;String&gt; online = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L317" title="All 2 branches missed.">        for (Map.Entry&lt;String, String&gt; entry : userStatus.entrySet()) {</span>
+<span class="nc bnc" id="L318" title="All 6 branches missed.">            if (&quot;online&quot;.equals(entry.getValue()) || &quot;away&quot;.equals(entry.getValue()) || &quot;busy&quot;.equals(entry.getValue())) {</span>
+<span class="nc" id="L319">                online.add(entry.getKey());</span>
+            }
+<span class="nc" id="L321">        }</span>
+<span class="nc" id="L322">        return online;</span>
+    }
+
+    public List&lt;String&gt; getAllUsers() {
+<span class="nc" id="L326">        return new ArrayList&lt;&gt;(users.keySet());</span>
+    }
+
+    public void makeAdmin(String username) {
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        if (users.containsKey(username)) {</span>
+<span class="nc" id="L331">            admins.add(username);</span>
+        }
+<span class="nc" id="L333">    }</span>
+
+    public void makeModerator(String username) {
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        if (users.containsKey(username)) {</span>
+<span class="nc" id="L337">            moderators.add(username);</span>
+        }
+<span class="nc" id="L339">    }</span>
+
+    public boolean isAdmin(String username) {
+<span class="nc" id="L342">        return admins.contains(username);</span>
+    }
+
+    public boolean isModerator(String username) {
+<span class="nc" id="L346">        return moderators.contains(username);</span>
+    }
+
+    public boolean banUser(String username, String reason) {
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        if (!users.containsKey(username)) {</span>
+<span class="nc" id="L351">            return false;</span>
+        }
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        bannedUsers.put(username, reason != null ? reason : &quot;No reason given&quot;);</span>
+<span class="nc" id="L354">        userStatus.put(username, &quot;offline&quot;);</span>
+<span class="nc" id="L355">        return true;</span>
+    }
+
+    public boolean isBanned(String username) {
+<span class="nc" id="L359">        return bannedUsers.containsKey(username);</span>
+    }
+
+    public void addNotification(String username, String message) {
+<span class="nc bnc" id="L363" title="All 2 branches missed.">        if (!userNotifications.containsKey(username)) {</span>
+<span class="nc" id="L364">            userNotifications.put(username, new ArrayList&lt;&gt;());</span>
+        }
+<span class="nc" id="L366">        List&lt;String&gt; notifs = userNotifications.get(username);</span>
+<span class="nc" id="L367">        notifs.add(LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm&quot;)) + &quot; - &quot; + message);</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">        if (notifs.size() &gt; 50) {</span>
+<span class="nc" id="L369">            notifs.remove(0);</span>
+        }
+<span class="nc" id="L371">    }</span>
+
+    public List&lt;String&gt; getNotifications(String username) {
+<span class="nc" id="L374">        return userNotifications.getOrDefault(username, new ArrayList&lt;&gt;());</span>
+    }
+
+    public void clearNotifications(String username) {
+<span class="nc" id="L378">        userNotifications.put(username, new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L379">    }</span>
+
+    public void issueWarning(String username, String reason) {
+<span class="nc" id="L382">        int count = warningCount.getOrDefault(username, 0);</span>
+<span class="nc" id="L383">        warningCount.put(username, count + 1);</span>
+<span class="nc" id="L384">        addNotification(username, &quot;Warning #&quot; + (count + 1) + &quot;: &quot; + reason);</span>
+<span class="nc" id="L385">        System.out.println(ANSI_YELLOW + &quot;Warning issued to &quot; + username + &quot; (&quot; + (count + 1) + &quot; total): &quot; + reason + ANSI_RESET);</span>
+<span class="nc" id="L386">    }</span>
+
+    public void updateLastActive(String username) {
+<span class="nc bnc" id="L389" title="All 2 branches missed.">        if (users.containsKey(username)) {</span>
+<span class="nc" id="L390">            lastActiveTime.put(username, System.currentTimeMillis());</span>
+        }
+<span class="nc" id="L392">    }</span>
+
+    public Map&lt;String, String&gt; getUserProfile(String username) {
+<span class="nc" id="L395">        return users.getOrDefault(username, null);</span>
+    }
+
+    private String formatDuration(long seconds) {
+<span class="nc" id="L399">        long hours = seconds / 3600;</span>
+<span class="nc" id="L400">        long minutes = (seconds % 3600) / 60;</span>
+<span class="nc" id="L401">        long secs = seconds % 60;</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">        if (hours &gt; 0) {</span>
+<span class="nc" id="L403">            return hours + &quot;h &quot; + minutes + &quot;m &quot; + secs + &quot;s&quot;;</span>
+<span class="nc bnc" id="L404" title="All 2 branches missed.">        } else if (minutes &gt; 0) {</span>
+<span class="nc" id="L405">            return minutes + &quot;m &quot; + secs + &quot;s&quot;;</span>
+        } else {
+<span class="nc" id="L407">            return secs + &quot;s&quot;;</span>
+        }
+    }
+
+    public int getUserCount() {
+<span class="nc" id="L412">        return users.size();</span>
+    }
+
+    public int getOnlineCount() {
+<span class="nc" id="L416">        return getOnlineUsers().size();</span>
+    }
+
+    // Validate and process user activity report - used for moderation dashboard
+    public String generateUserActivityReport(String username, String reportType, String timeRange,
+                                              boolean includePrivate, String requestedBy) {
+<span class="nc bnc" id="L422" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L423">            return ANSI_RED + &quot;Error: username required&quot; + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L425" title="All 2 branches missed.">        if (!users.containsKey(username)) {</span>
+<span class="nc" id="L426">            return ANSI_RED + &quot;User not found: &quot; + username + ANSI_RESET;</span>
+        }
+<span class="nc bnc" id="L428" title="All 4 branches missed.">        if (reportType == null || reportType.isEmpty()) {</span>
+<span class="nc" id="L429">            reportType = &quot;summary&quot;;</span>
+        }
+<span class="nc bnc" id="L431" title="All 4 branches missed.">        if (timeRange == null || timeRange.isEmpty()) {</span>
+<span class="nc" id="L432">            timeRange = &quot;all&quot;;</span>
+        }
+<span class="nc" id="L434">        Map&lt;String, String&gt; profile = users.get(username);</span>
+<span class="nc" id="L435">        StringBuilder report = new StringBuilder();</span>
+<span class="nc" id="L436">        report.append(ANSI_CYAN).append(ANSI_BOLD).append(&quot;=== Activity Report: &quot;).append(username).append(&quot; ===&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">        if (reportType.equals(&quot;summary&quot;)) {</span>
+<span class="nc" id="L438">            report.append(ANSI_WHITE).append(&quot;Status: &quot;).append(userStatus.getOrDefault(username, &quot;offline&quot;)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L439">            report.append(ANSI_WHITE).append(&quot;Joined: &quot;).append(profile.getOrDefault(&quot;joinDate&quot;, &quot;unknown&quot;)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L440">            report.append(ANSI_WHITE).append(&quot;Messages: &quot;).append(profile.getOrDefault(&quot;messageCount&quot;, &quot;0&quot;)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L441">            int warns = warningCount.getOrDefault(username, 0);</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            if (warns &gt; 0) {</span>
+<span class="nc" id="L443">                report.append(ANSI_YELLOW).append(&quot;Warnings: &quot;).append(warns).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+            }
+<span class="nc bnc" id="L445" title="All 2 branches missed.">            if (bannedUsers.containsKey(username)) {</span>
+<span class="nc" id="L446">                report.append(ANSI_RED).append(&quot;BANNED: &quot;).append(bannedUsers.get(username)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+            }
+<span class="nc bnc" id="L448" title="All 2 branches missed.">            if (admins.contains(username)) {</span>
+<span class="nc" id="L449">                report.append(ANSI_RED).append(ANSI_BOLD).append(&quot;Role: ADMIN&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L450" title="All 2 branches missed.">            } else if (moderators.contains(username)) {</span>
+<span class="nc" id="L451">                report.append(ANSI_PURPLE).append(ANSI_BOLD).append(&quot;Role: MODERATOR&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+            } else {
+<span class="nc" id="L453">                report.append(ANSI_WHITE).append(&quot;Role: user&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+            }
+<span class="nc bnc" id="L455" title="All 2 branches missed.">        } else if (reportType.equals(&quot;social&quot;)) {</span>
+<span class="nc" id="L456">            Set&lt;String&gt; userFriends = friends.getOrDefault(username, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L457">            Set&lt;String&gt; blocked = blockedUsers.getOrDefault(username, new HashSet&lt;&gt;());</span>
+<span class="nc" id="L458">            report.append(ANSI_WHITE).append(&quot;Friends: &quot;).append(userFriends.size()).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L459">            report.append(ANSI_WHITE).append(&quot;Blocked users: &quot;).append(blocked.size()).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L460" title="All 8 branches missed.">            if (includePrivate &amp;&amp; requestedBy != null &amp;&amp; (requestedBy.equals(username) || admins.contains(requestedBy))) {</span>
+<span class="nc bnc" id="L461" title="All 2 branches missed.">                if (!userFriends.isEmpty()) {</span>
+<span class="nc" id="L462">                    report.append(ANSI_CYAN).append(&quot;Friend list:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L463" title="All 2 branches missed.">                    for (String friend : userFriends) {</span>
+<span class="nc" id="L464">                        String friendStatus = userStatus.getOrDefault(friend, &quot;offline&quot;);</span>
+                        String statusColor;
+<span class="nc bnc" id="L466" title="All 2 branches missed.">                        if (friendStatus.equals(&quot;online&quot;)) {</span>
+<span class="nc" id="L467">                            statusColor = ANSI_GREEN;</span>
+<span class="nc bnc" id="L468" title="All 2 branches missed.">                        } else if (friendStatus.equals(&quot;away&quot;)) {</span>
+<span class="nc" id="L469">                            statusColor = ANSI_YELLOW;</span>
+                        } else {
+<span class="nc" id="L471">                            statusColor = ANSI_WHITE;</span>
+                        }
+<span class="nc" id="L473">                        report.append(&quot;  &quot;).append(statusColor).append(friend).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L474">                    }</span>
+                }
+<span class="nc bnc" id="L476" title="All 2 branches missed.">                if (!blocked.isEmpty()) {</span>
+<span class="nc" id="L477">                    report.append(ANSI_CYAN).append(&quot;Block list:&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L478" title="All 2 branches missed.">                    for (String blockedUser : blocked) {</span>
+<span class="nc" id="L479">                        report.append(&quot;  &quot;).append(ANSI_RED).append(blockedUser).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L480">                    }</span>
+                }
+            }
+<span class="nc bnc" id="L483" title="All 2 branches missed.">        } else if (reportType.equals(&quot;notifications&quot;)) {</span>
+<span class="nc" id="L484">            List&lt;String&gt; notifs = userNotifications.getOrDefault(username, new ArrayList&lt;&gt;());</span>
+<span class="nc" id="L485">            report.append(ANSI_WHITE).append(&quot;Total notifications: &quot;).append(notifs.size()).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L486" title="All 6 branches missed.">            if (includePrivate &amp;&amp; requestedBy != null &amp;&amp; requestedBy.equals(username)) {</span>
+<span class="nc bnc" id="L487" title="All 2 branches missed.">                if (notifs.isEmpty()) {</span>
+<span class="nc" id="L488">                    report.append(ANSI_YELLOW).append(&quot;  No notifications&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+                } else {
+<span class="nc bnc" id="L490" title="All 2 branches missed.">                    for (String notif : notifs) {</span>
+<span class="nc" id="L491">                        report.append(&quot;  &quot;).append(ANSI_WHITE).append(notif).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L492">                    }</span>
+                }
+            }
+<span class="nc bnc" id="L495" title="All 2 branches missed.">        } else if (reportType.equals(&quot;timing&quot;)) {</span>
+<span class="nc" id="L496">            Long loginTime = loginTimes.get(username);</span>
+<span class="nc" id="L497">            Long lastActive = lastActiveTime.get(username);</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">            if (loginTime != null) {</span>
+<span class="nc" id="L499">                report.append(ANSI_WHITE).append(&quot;Login time: &quot;).append(</span>
+<span class="nc" id="L500">                    LocalDateTime.now().format(DateTimeFormatter.ofPattern(&quot;HH:mm:ss&quot;))).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L501">                long onlineSecs = (System.currentTimeMillis() - loginTime) / 1000;</span>
+<span class="nc" id="L502">                report.append(ANSI_WHITE).append(&quot;Session length: &quot;).append(formatDuration(onlineSecs)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+            }
+<span class="nc bnc" id="L504" title="All 2 branches missed.">            if (lastActive != null) {</span>
+<span class="nc" id="L505">                long idleSecs = (System.currentTimeMillis() - lastActive) / 1000;</span>
+<span class="nc" id="L506">                report.append(ANSI_WHITE).append(&quot;Idle for: &quot;).append(formatDuration(idleSecs)).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L507" title="All 2 branches missed.">                if (idleSecs &gt; 600) {</span>
+<span class="nc" id="L508">                    report.append(ANSI_YELLOW).append(&quot;User appears idle (&gt;10 minutes)&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L509" title="All 2 branches missed.">                } else if (idleSecs &gt; 1800) {</span>
+<span class="nc" id="L510">                    report.append(ANSI_RED).append(&quot;User may be AFK (&gt;30 minutes)&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+                }
+            }
+<span class="nc" id="L513">        } else {</span>
+<span class="nc" id="L514">            report.append(ANSI_RED).append(&quot;Unknown report type: &quot;).append(reportType).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc" id="L515">            report.append(ANSI_WHITE).append(&quot;Valid types: summary, social, notifications, timing&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+        }
+<span class="nc bnc" id="L517" title="All 2 branches missed.">        if (timeRange.equals(&quot;today&quot;)) {</span>
+<span class="nc" id="L518">            report.append(ANSI_CYAN).append(&quot;(Filtered to today's activity)&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">        } else if (timeRange.equals(&quot;week&quot;)) {</span>
+<span class="nc" id="L520">            report.append(ANSI_CYAN).append(&quot;(Filtered to this week's activity)&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">        } else if (timeRange.equals(&quot;month&quot;)) {</span>
+<span class="nc" id="L522">            report.append(ANSI_CYAN).append(&quot;(Filtered to this month's activity)&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+<span class="nc bnc" id="L523" title="All 2 branches missed.">        } else if (!timeRange.equals(&quot;all&quot;)) {</span>
+<span class="nc" id="L524">            report.append(ANSI_YELLOW).append(&quot;Unknown time range: &quot;).append(timeRange).append(&quot;. Showing all.&quot;).append(ANSI_RESET).append(&quot;\n&quot;);</span>
+        }
+<span class="nc" id="L526">        return report.toString();</span>
+    }
+
+    // Validate user action permissions - copy-pasted validation from registerUser with small tweaks
+    public boolean validateUserAction(String username, String action, String targetUsername, String roomName) {
+<span class="nc bnc" id="L531" title="All 4 branches missed.">        if (username == null || username.isEmpty()) {</span>
+<span class="nc" id="L532">            System.out.println(ANSI_RED + &quot;Validation failed: Username cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L533">            return false;</span>
+        }
+<span class="nc bnc" id="L535" title="All 2 branches missed.">        if (username.length() &lt; MIN_USERNAME_LENGTH) {</span>
+<span class="nc" id="L536">            System.out.println(ANSI_RED + &quot;Validation failed: Username too short (min &quot; + MIN_USERNAME_LENGTH + &quot;)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L537">            return false;</span>
+        }
+<span class="nc bnc" id="L539" title="All 2 branches missed.">        if (username.length() &gt; MAX_USERNAME_LENGTH) {</span>
+<span class="nc" id="L540">            System.out.println(ANSI_RED + &quot;Validation failed: Username too long (max &quot; + MAX_USERNAME_LENGTH + &quot;)&quot; + ANSI_RESET);</span>
+<span class="nc" id="L541">            return false;</span>
+        }
+<span class="nc bnc" id="L543" title="All 2 branches missed.">        if (!username.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L544">            System.out.println(ANSI_RED + &quot;Validation failed: Username contains invalid characters&quot; + ANSI_RESET);</span>
+<span class="nc" id="L545">            return false;</span>
+        }
+<span class="nc bnc" id="L547" title="All 2 branches missed.">        if (!users.containsKey(username)) {</span>
+<span class="nc" id="L548">            System.out.println(ANSI_RED + &quot;Validation failed: User '&quot; + username + &quot;' is not registered&quot; + ANSI_RESET);</span>
+<span class="nc" id="L549">            return false;</span>
+        }
+<span class="nc bnc" id="L551" title="All 2 branches missed.">        if (bannedUsers.containsKey(username)) {</span>
+<span class="nc" id="L552">            System.out.println(ANSI_RED + &quot;Validation failed: User '&quot; + username + &quot;' is banned&quot; + ANSI_RESET);</span>
+<span class="nc" id="L553">            return false;</span>
+        }
+<span class="nc" id="L555">        String status = userStatus.getOrDefault(username, &quot;offline&quot;);</span>
+<span class="nc bnc" id="L556" title="All 2 branches missed.">        if (status.equals(&quot;offline&quot;)) {</span>
+<span class="nc" id="L557">            System.out.println(ANSI_YELLOW + &quot;Warning: User '&quot; + username + &quot;' appears offline&quot; + ANSI_RESET);</span>
+        }
+<span class="nc bnc" id="L559" title="All 4 branches missed.">        if (action == null || action.isEmpty()) {</span>
+<span class="nc" id="L560">            System.out.println(ANSI_RED + &quot;Validation failed: Action cannot be empty&quot; + ANSI_RESET);</span>
+<span class="nc" id="L561">            return false;</span>
+        }
+<span class="nc bnc" id="L563" title="All 6 branches missed.">        if (action.equals(&quot;ban&quot;) || action.equals(&quot;kick&quot;) || action.equals(&quot;mute&quot;)) {</span>
+<span class="nc bnc" id="L564" title="All 4 branches missed.">            if (!admins.contains(username) &amp;&amp; !moderators.contains(username)) {</span>
+<span class="nc" id="L565">                System.out.println(ANSI_RED + &quot;Permission denied: '&quot; + action + &quot;' requires moderator or admin role&quot; + ANSI_RESET);</span>
+<span class="nc" id="L566">                return false;</span>
+            }
+<span class="nc bnc" id="L568" title="All 4 branches missed.">            if (targetUsername != null &amp;&amp; admins.contains(targetUsername)) {</span>
+<span class="nc" id="L569">                System.out.println(ANSI_RED + &quot;Cannot perform '&quot; + action + &quot;' on an admin user&quot; + ANSI_RESET);</span>
+<span class="nc" id="L570">                return false;</span>
+            }
+<span class="nc bnc" id="L572" title="All 2 branches missed.">        } else if (action.equals(&quot;delete&quot;)) {</span>
+<span class="nc bnc" id="L573" title="All 2 branches missed.">            if (!admins.contains(username)) {</span>
+<span class="nc" id="L574">                System.out.println(ANSI_RED + &quot;Permission denied: 'delete' requires admin role&quot; + ANSI_RESET);</span>
+<span class="nc" id="L575">                return false;</span>
+            }
+<span class="nc bnc" id="L577" title="All 4 branches missed.">        } else if (action.equals(&quot;invite&quot;) || action.equals(&quot;topic&quot;)) {</span>
+<span class="nc bnc" id="L578" title="All 4 branches missed.">            if (!admins.contains(username) &amp;&amp; !moderators.contains(username)) {</span>
+<span class="nc" id="L579">                System.out.println(ANSI_RED + &quot;Permission denied: '&quot; + action + &quot;' requires moderator role&quot; + ANSI_RESET);</span>
+<span class="nc" id="L580">                return false;</span>
+            }
+<span class="nc bnc" id="L582" title="All 2 branches missed.">        } else if (action.equals(&quot;message&quot;)) {</span>
+<span class="nc bnc" id="L583" title="All 4 branches missed.">            if (targetUsername != null &amp;&amp; blockedUsers.containsKey(username) &amp;&amp;</span>
+<span class="nc bnc" id="L584" title="All 2 branches missed.">                    blockedUsers.get(username).contains(targetUsername)) {</span>
+<span class="nc" id="L585">                System.out.println(ANSI_RED + &quot;Cannot message &quot; + targetUsername + &quot;: you have blocked them&quot; + ANSI_RESET);</span>
+<span class="nc" id="L586">                return false;</span>
+            }
+<span class="nc bnc" id="L588" title="All 4 branches missed.">            if (targetUsername != null &amp;&amp; blockedUsers.containsKey(targetUsername) &amp;&amp;</span>
+<span class="nc bnc" id="L589" title="All 2 branches missed.">                    blockedUsers.get(targetUsername).contains(username)) {</span>
+<span class="nc" id="L590">                System.out.println(ANSI_RED + &quot;Cannot message &quot; + targetUsername + &quot;: you have been blocked&quot; + ANSI_RESET);</span>
+<span class="nc" id="L591">                return false;</span>
+            }
+<span class="nc bnc" id="L593" title="All 8 branches missed.">        } else if (!action.equals(&quot;join&quot;) &amp;&amp; !action.equals(&quot;leave&quot;) &amp;&amp; !action.equals(&quot;read&quot;) &amp;&amp; !action.equals(&quot;search&quot;)) {</span>
+<span class="nc" id="L594">            System.out.println(ANSI_YELLOW + &quot;Unknown action: &quot; + action + ANSI_RESET);</span>
+        }
+<span class="nc" id="L596">        return true;</span>
+    }
+
+    // Bulk user import for admin purposes
+    public Map&lt;String, Boolean&gt; bulkRegisterUsers(List&lt;String&gt; usernames, boolean sendNotifications) {
+<span class="nc" id="L601">        Map&lt;String, Boolean&gt; results = new HashMap&lt;&gt;();</span>
+<span class="nc bnc" id="L602" title="All 4 branches missed.">        if (usernames == null || usernames.isEmpty()) {</span>
+<span class="nc" id="L603">            return results;</span>
+        }
+<span class="nc bnc" id="L605" title="All 2 branches missed.">        for (String uname : usernames) {</span>
+<span class="nc bnc" id="L606" title="All 4 branches missed.">            if (uname == null || uname.isEmpty()) {</span>
+<span class="nc" id="L607">                results.put(&quot;(empty)&quot;, false);</span>
+<span class="nc" id="L608">                continue;</span>
+            }
+<span class="nc" id="L610">            String trimmed = uname.trim();</span>
+<span class="nc bnc" id="L611" title="All 2 branches missed.">            if (trimmed.isEmpty()) {</span>
+<span class="nc" id="L612">                results.put(&quot;(blank)&quot;, false);</span>
+<span class="nc" id="L613">                continue;</span>
+            }
+<span class="nc bnc" id="L615" title="All 2 branches missed.">            if (trimmed.length() &lt; MIN_USERNAME_LENGTH) {</span>
+<span class="nc" id="L616">                System.out.println(ANSI_RED + &quot;Skipping '&quot; + trimmed + &quot;': too short&quot; + ANSI_RESET);</span>
+<span class="nc" id="L617">                results.put(trimmed, false);</span>
+<span class="nc" id="L618">                continue;</span>
+            }
+<span class="nc bnc" id="L620" title="All 2 branches missed.">            if (trimmed.length() &gt; MAX_USERNAME_LENGTH) {</span>
+<span class="nc" id="L621">                System.out.println(ANSI_RED + &quot;Skipping '&quot; + trimmed + &quot;': too long&quot; + ANSI_RESET);</span>
+<span class="nc" id="L622">                results.put(trimmed, false);</span>
+<span class="nc" id="L623">                continue;</span>
+            }
+<span class="nc bnc" id="L625" title="All 2 branches missed.">            if (!trimmed.matches(&quot;[a-zA-Z0-9_]+&quot;)) {</span>
+<span class="nc" id="L626">                System.out.println(ANSI_RED + &quot;Skipping '&quot; + trimmed + &quot;': invalid characters&quot; + ANSI_RESET);</span>
+<span class="nc" id="L627">                results.put(trimmed, false);</span>
+<span class="nc" id="L628">                continue;</span>
+            }
+<span class="nc bnc" id="L630" title="All 2 branches missed.">            if (bannedUsers.containsKey(trimmed)) {</span>
+<span class="nc" id="L631">                System.out.println(ANSI_RED + &quot;Skipping '&quot; + trimmed + &quot;': user is banned&quot; + ANSI_RESET);</span>
+<span class="nc" id="L632">                results.put(trimmed, false);</span>
+<span class="nc" id="L633">                continue;</span>
+            }
+<span class="nc" id="L635">            boolean registered = registerUser(trimmed);</span>
+<span class="nc" id="L636">            results.put(trimmed, registered);</span>
+<span class="nc bnc" id="L637" title="All 4 branches missed.">            if (registered &amp;&amp; sendNotifications) {</span>
+<span class="nc" id="L638">                addNotification(trimmed, &quot;Welcome to JavaChat! Type /help to get started.&quot;);</span>
+            }
+<span class="nc" id="L640">        }</span>
+<span class="nc" id="L641">        return results;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
